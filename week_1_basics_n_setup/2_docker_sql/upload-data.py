@@ -19,6 +19,10 @@ def main(params):
     # Create engine to connect to pg db
     engine = create_engine(f'postgresql://{user}:{password}@{host}:{port}/{db}')
 
+    # Download the file from Google Drive
+    url_code = '1p2y79m_q9rPM48cEYwQdrk6XVCTFSyRA'
+    os.system(f'gdown {url_code}')
+
     # Read the file csv, split into multiple 100000 rows files
     csv_name = 'yellow_tripdata_2021-01.csv'
     df_iter = pd.read_csv(csv_name, iterator=True, chunksize=100000)

@@ -20,9 +20,9 @@ services:
     ports:
       - "8080:80"
 
-  data-uploader:
-    build:
-      context: .
-      dockerfile: ./Dockerfile
-    depends_on:
-      - pg-database
+  # data-uploader:
+  #   build:
+  #     context: .
+  #     dockerfile: ./Dockerfile
+  #   depends_on:
+  #     - pg-database
