@@ -5,7 +5,7 @@ docker run -it \
 -e POSTGRES_USER="root" \
 -e POSTGRES_PASSWORD="root" \
 -e POSTGRES_DB="ny_taxi" \
--v D:/week_1_basics_n_setup/2_docker_sql/my_taxi_postgres_data:/var/lib/postgresql/data \
+-v D:/code/github/de-zoomcamp/week_1_basics_n_setup/2_docker_sql/my_taxi_postgres_data:/var/lib/postgresql/data \
 -p 5432:5432 \
 --network=pg-network \
 --name pg-database \
@@ -44,7 +44,7 @@ docker run -it \
   taxi_ingest:v001 \
     --user=root \
     --password=root \
-    --host=192.168.176.1 \
+    --host=192.168.2.8 \
     --port=5432 \
     --db=ny_taxi \
     --table_name=yellow_taxi_data

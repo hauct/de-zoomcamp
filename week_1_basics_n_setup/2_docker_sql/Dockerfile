@@ -8,7 +8,7 @@ COPY yellow_tripdata_2021-01.csv yellow_tripdata_2021-01.csv
 ENTRYPOINT [ "python", "upload-data.py", \
              "--user", "root", \
              "--password", "root", \
-             "--host", "192.168.176.1", \
+             "--host", "192.168.2.8", \
              "--port", "5432", \
              "--db", "ny_taxi", \
              "--table_name", "yellow_taxi_data"]
