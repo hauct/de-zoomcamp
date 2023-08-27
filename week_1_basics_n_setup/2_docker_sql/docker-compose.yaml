@@ -1,7 +1,5 @@
-version: '3.8'
-
 services:
-  pg-database:
+  pgdatabase:
     image: postgres:13
     environment:
       - POSTGRES_USER=root
@@ -12,7 +10,7 @@ services:
     ports:
       - "5432:5432"
   
-  pg-admin:
+  pgadmin:
     image: dpage/pgadmin4
     environment:
       - PGADMIN_DEFAULT_EMAIL=admin@admin.com
