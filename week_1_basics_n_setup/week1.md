@@ -817,8 +817,7 @@ container.
 But this will not work since we must ensure that the two containers can communicate with each other. To do this, we will
 use **docker network**.
 
-Stop both containers (postgres and pgAdmin) with kbd:\[Ctrl+C\] and go to [docker network
-create](https://docs.docker.com/engine/reference/commandline/network_create/).
+Stop both containers (`Postgres`` and `pgAdmin`) and go to [docker network create](https://docs.docker.com/engine/reference/commandline/network_create/).
 
 In a new terminal window, run this command to create a new network:
 
