@@ -572,8 +572,8 @@ Then go to <http://localhost:8080/> again, enter username `admin@admin.com` and 
 Then create a server. Click on **Add New Server**, enter the information as below (still with username `admin@admin.com`
 and password `root`), then click the **Save** button.
 
-|                            |                           |
-|----------------------------|---------------------------|
+|                            |                            |
+|----------------------------|----------------------------|
 | ![p07](images/sever_1.png) | ![p08](images/sever_2.png) |
 
 In the left menu, click successively on **Server**, **Local Docker**, **Database**, **ny_taxi**, **Schemas**,
@@ -589,8 +589,7 @@ Enter this query `SELECT COUNT(1) FROM yellow_daxi_data;`.
 
 ### Dockerizing the Ingestion Script
 
-See [DE Zoomcamp 1.2.4 - Dockerizing the Ingestion
-Script](https://www.youtube.com/watch?v=B1WwATwf-vY&list=PL3MmuxUbc_hJed7dXYoJw8DoCuVHhGEQb&index=8) on Youtube.
+See [DE Zoomcamp 1.2.4 - Dockerizing the Ingestion Script](https://www.youtube.com/watch?v=B1WwATwf-vY&list=PL3MmuxUbc_hJed7dXYoJw8DoCuVHhGEQb&index=8) on Youtube.
 
 Please check the file `upload-data.py` on folder `2_docker_sql`, you will see this full script:
 
@@ -803,7 +802,7 @@ Normally, Docker compose is already installed since it is included in Docker Des
 With Docker compose, the images will be installed automatically in the same network.
 
 See
-[docker-compose.yaml](https://github.com/DataTalksClub/data-engineering-zoomcamp/blob/main/week_1_basics_n_setup/2_docker_sql/docker-compose.yaml).
+[docker-compose.yaml](2_docker_sql/docker-compose.yaml).
 
 <div class="formalpara-title">
 
@@ -875,8 +874,6 @@ window and you don’t need to open a new window.
 
 ### Port Mapping and Networks in Docker (Bonus)
 
-> 2023-01-20.
-
 See [DE Zoomcamp 1.4.2 - Port Mapping and Networks in Docker (Bonus)](https://www.youtube.com/watch?v=tOr4hTsHOzU).
 
 * Docker networks
@@ -886,5 +883,65 @@ See [DE Zoomcamp 1.4.2 - Port Mapping and Networks in Docker (Bonus)](https://ww
 
 ![p13](images/port_mapping.png)
 
+## GCP + Terraform
+
+The code is [here](/1_terraform_gcp/)
+
+### Introduction to Google Cloud Platform
+
+See [DE Zoomcamp 1.1.1 - Introduction to Google Cloud Platform](https://www.youtube.com/watch?v=18jIzE41fJ4) on Youtube.
+
+### Introduction to Terraform Concepts & GCP Pre-Requisites
+
+See [DE Zoomcamp 1.3.1 - Introduction to Terraform Concepts & GCP Pre-Requisites](https://www.youtube.com/watch?v=Hajwnmj0xfQ) on Youtube and [1_terraform_overview.md](1_terraform_gcp/1_terraform_overview.md) on GitHub.
+
+* What is Terraform?
+  * [Terraform](https://www.terraform.io/) is a tool for build, change, and destroy infrastructure.
+  * Open-source tool by HashiCorp, used for provisioning infrastructure resources.
+  * Supports DevOps best practices for change management.
+  * Managing configuration files in source control to maintain an ideal provisioning state for testing and production
+    environments.
+
+* What is IaC?
+  * Infrastructure-as-Code.
+  * Build, change, and manage your infrastructure in a safe, consistent, and repeatable way by defining resource
+    configurations that you can version, reuse, and share.
+
+* Some advantages
+  * Infrastructure lifecycle management.
+  * Version control commits.
+  * Very useful for stack-based deployments, and with cloud providers such as AWS, GCP, Azure, K8S.
+  * State-based approach to track resource changes throughout deployments.
+
+See [Install Terraform](https://developer.hashicorp.com/terraform/downloads) and [Install Terraform
+CLI](https://developer.hashicorp.com/terraform/tutorials/gcp-get-started/install-cli).
 
 
+I opened my free GCP account with \$300 credit to spend within 90 days.
+
+I was asked for my credit card. But it was clearly indicated :  
+**No autocharge after free trial ends**  
+We ask you for your credit card to make sure you are not a robot. You won’t be charged unless you manually upgrade to a
+paid account.
+
+Go to the [Google Cloud Console](https://console.cloud.google.com/welcome).
+
+I created the project ny-rides-hauct (for DataTalks.Club Data Engineering Zoomcamp).
+
+|                                   |                                    |
+|-----------------------------------|------------------------------------|
+|![p14](images/create_project_1.png)|![p15](images/create_project_2.png) |
+
+Select the ny-rides-hauct project and go to the left menu `IAM & Admin`, then `Service Accounts`.
+
+![p16](images/service_account_1.png)
+
+We must then click on **+ CREATE SERVICE ACCOUNT** located at the top.
+
+See [Understanding service accounts"](https://cloud.google.com/iam/docs/understanding-service-accounts).
+
+Enter **ny-rides-hauct** in the **Service account name** field, then click on **CREATE AND CONTINUE** button.
+
+Select `Viewer` in the **Role** field, then click the **DONE** button.
+
+![s17](dtc/s17.png)
