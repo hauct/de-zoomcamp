@@ -1,10 +1,8 @@
 ### Introduction
 # Data Engineering Zoomcamp 2023 Week 1: Introduction & Prerequisites
-
 See [README.md](https://github.com/DataTalksClub/data-engineering-zoomcamp/blob/main/week_1_basics_n_setup/README.md) from week 1.
 
 ## Table of Contents
-
 * [Docker + Postgres](#user-content-docker--postgres)
   * [Introduction to Docker](#user-content-introduction-to-docker)
   * Ingesting NY Taxi Data to Postgres
@@ -22,9 +20,7 @@ See [README.md](https://github.com/DataTalksClub/data-engineering-zoomcamp/blob/
 * See also
 
 ## Docker + Postgres
-
 ### Introduction to Docker
-
 See [DE Zoomcamp 1.2.1 - Introduction to Docker](https://www.youtube.com/watch?v=EYNwNlOrpr0).
 
 ![Docker](images/docker.png).
@@ -588,7 +584,6 @@ Enter this query `SELECT COUNT(1) FROM yellow_daxi_data;`.
 ![p10](images/query_2.png)
 
 ### Dockerizing the Ingestion Script
-
 See [DE Zoomcamp 1.2.4 - Dockerizing the Ingestion Script](https://www.youtube.com/watch?v=B1WwATwf-vY&list=PL3MmuxUbc_hJed7dXYoJw8DoCuVHhGEQb&index=8) on Youtube.
 
 Please check the file `upload-data.py` on folder `2_docker_sql`, you will see this full script:
@@ -780,12 +775,10 @@ We also mention the possibility of creating your own http server with the comman
 </div>
 
 ### Running Postgres and pgAdmin with Docker-Compose
-
 See [DE Zoomcamp 1.2.5 - Running Postgres and pgAdmin with Docker-Compose](https://www.youtube.com/watch?v=hKI6PkPhpa0)
 on Youtube.
 
 #### Introduction to Docker-Compose
-
 So far we have run several commands to create docker instances, load data, etc. We’re gonna make it all simple using
 [docker compose](https://docs.docker.com/compose/).
 
@@ -794,11 +787,9 @@ configure your application’s services. Then, with a single command, you create
 configuration.
 
 #### Installing Docker-Compose
-
 Normally, Docker compose is already installed since it is included in Docker Desktop.
 
 #### Configuration of postgres database and pgadmin in Docker-Compose file
-
 With Docker compose, the images will be installed automatically in the same network.
 
 See
@@ -833,7 +824,7 @@ services:
 For more details, please check file `docker-compose.yaml` on folder `2_docker_sql`
 
 #### Running the Docker-Compose file
-we need to stop the current running containers **pgadmin** et **postgres**.
+We need to stop the current running containers **pgadmin** et **postgres**.
 
 ![p11](images/docker_stop.png)
 
@@ -864,16 +855,13 @@ Let’s check if the database table is correct.
 
 
 #### Stopping the running containers with Docker-Compose
-
 To stop this running docker compose, just run the command `$ docker-compose down`.
 
 #### Running Docker-Compose in detached mode
-
 You can restart in detached mode, with the command `$ docker-compose up -d`. This way allows us to find the terminal
 window and you don’t need to open a new window.
 
 ### Port Mapping and Networks in Docker (Bonus)
-
 See [DE Zoomcamp 1.4.2 - Port Mapping and Networks in Docker (Bonus)](https://www.youtube.com/watch?v=tOr4hTsHOzU).
 
 * Docker networks
@@ -884,15 +872,12 @@ See [DE Zoomcamp 1.4.2 - Port Mapping and Networks in Docker (Bonus)](https://ww
 ![p13](images/port_mapping.png)
 
 ## GCP + Terraform
-
 The code is [here](/1_terraform_gcp/)
 
 ### Introduction to Google Cloud Platform
-
 See [DE Zoomcamp 1.1.1 - Introduction to Google Cloud Platform](https://www.youtube.com/watch?v=18jIzE41fJ4) on Youtube.
 
 ### Introduction to Terraform Concepts & GCP Pre-Requisites
-
 See [DE Zoomcamp 1.3.1 - Introduction to Terraform Concepts & GCP Pre-Requisites](https://www.youtube.com/watch?v=Hajwnmj0xfQ) on Youtube and [1_terraform_overview.md](1_terraform_gcp/1_terraform_overview.md) on GitHub.
 
 * What is Terraform?
@@ -940,8 +925,735 @@ We must then click on **+ CREATE SERVICE ACCOUNT** located at the top.
 
 See [Understanding service accounts"](https://cloud.google.com/iam/docs/understanding-service-accounts).
 
-Enter **ny-rides-hauct** in the **Service account name** field, then click on **CREATE AND CONTINUE** button.
+Enter **ny-rides-viewr** in the **Service account name** field, then click on **CREATE AND CONTINUE** button.
 
 Select `Viewer` in the **Role** field, then click the **DONE** button.
 
-![s17](dtc/s17.png)
+Right under **Actions**, select **Manage keys**. Then under the **ADD KEY** button, select **Create New Key** and keep
+**JSON** as key type.
+
+Save the private key `ny-rides-hauct-397604-5b0b890dd98c.json` to your computer (like here `C:/Users/cungt/.gc`).
+
+Download [Google Cloud CLI](https://cloud.google.com/sdk/docs/install-sdk) for local setup.
+
+I downloaded the [file](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe) for Windows.
+Open the file and keep default settings, the installation will run
+
+The main folder is `C:/Users/cungt/AppData/Local/Google/Cloud SDK`
+
+Open your terminal and type
+``` bash
+gcloud -v
+```
+![p17](images/gcp_local_check.png)
+
+Then I run this:
+
+``` bash
+$ gcloud components update
+# Do you want to continue (Y/n)? Y
+```
+
+See [Install the Google Cloud CLI](https://cloud.google.com/sdk/docs/install-sdk) for more information.
+
+Finally, I ran the following command:
+``` bash
+# Refresh token/session, and verify authentication
+$ export GOOGLE_APPLICATION_CREDENTIALS="C:/Users/cungt/.gc/ny-rides-hauct-397604-5b0b890dd98c.json"
+$ gcloud auth application-default login
+```
+
+Select the required account, click on **Allow** button and then Google tells me that **You are now authenticated with
+the gcloud CLI!**.
+
+I already installed Terraform. If not, go to [Install Terraform](https://developer.hashicorp.com/terraform/downloads).
+
+We will use Google Cloud Storage (GCS) for Data Lake and BigQuery for Data Warehouse.
+
+In the GCP Console, go to the left menu **IAM**, then click on the pencil to edit permissions of the key that has just
+been created. We must add the roles, **Storage Object Admin** and **BigQuery Admin**, then click on
+the **Save** button.
+
+
+![p18](images/edit_role.png)
+
+Go to [IAM Service Account Credentials
+API](https://console.cloud.google.com/apis/library/iamcredentials.googleapis.com), make sure to select the right project
+**ny-rides-hauct** and click **ENABLE** button.
+
+### Workshop: Creating GCP Infrastructure with Terraform
+> 2023-01-21.
+
+See [DE Zoomcamp 1.3.2 - Creating GCP Infrastructure with
+Terraform](https://www.youtube.com/watch?v=dNkEgO-CExg&list=PL3MmuxUbc_hJed7dXYoJw8DoCuVHhGEQb&index=12).
+
+See also on GitHub repository :
+
+* [1_terraform_overview.md](https://github.com/DataTalksClub/data-engineering-zoomcamp/blob/main/week_1_basics_n_setup/1_terraform_gcp/1_terraform_overview.md)
+  on GitHub.
+* [Wirkshop](https://github.com/DataTalksClub/data-engineering-zoomcamp/tree/main/week_1_basics_n_setup/1_terraform_gcp/terraform)
+
+Important files to use Terraform are `main.tf` and `variables.tf`. I can have an option the `resources.tf` and
+`output.tf` files.
+
+For this section, create a directory and copy these files inside.
+``` bash
+$ mkdir ~/learning/terraform
+$ cp main.tf variables.tf ~/learning/terraform
+```
+
+We must specify in `main.tf` the resources we want to use.
+
+Note that I installed the [Terraform extension for Visual Studio
+Code](https://marketplace.visualstudio.com/items?itemName=HashiCorp.terraform). See [Terraform Learning
+Guides](https://developer.hashicorp.com/terraform/tutorials).
+
+The `main.tf` file contains the instructions to create a new bucket in Google cloud storage service (GCS). See
+[google_storage_bucket](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/storage_bucket)
+for a predefined definition specific for GCS.
+
+See also [Google Cloud Storage documentation](https://cloud.google.com/storage/docs).
+
+<div class="formalpara-title">
+
+**File `main.tf`**
+
+</div>
+
+``` txt
+terraform {
+  required_version = ">= 1.0"
+  backend "local" {}  # Can change from "local" to "gcs" (for google) or "s3" (for aws), if you would like to preserve your tf-state online
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+    }
+  }
+}
+
+provider "google" {
+  project = var.project
+  region = var.region
+  // credentials = file(var.credentials)  # Use this if you do not want to set env-var GOOGLE_APPLICATION_CREDENTIALS
+}
+
+# Data Lake Bucket
+# Ref: https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/storage_bucket
+resource "google_storage_bucket" "data-lake-bucket" {
+  name          = "${local.data_lake_bucket}_${var.project}" # Concatenating DL bucket & Project name for unique naming
+  location      = var.region
+
+  # Optional, but recommended settings:
+  storage_class = var.storage_class
+  uniform_bucket_level_access = true
+
+  versioning {
+    enabled     = true
+  }
+
+  lifecycle_rule {
+    action {
+      type = "Delete"
+    }
+    condition {
+      age = 30  // days
+    }
+  }
+
+  force_destroy = true
+}
+
+# DWH
+# Ref: https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/bigquery_dataset
+resource "google_bigquery_dataset" "dataset" {
+  dataset_id = var.BQ_DATASET
+  project    = var.project
+  location   = var.region
+}
+```
+
+The file `variables.tf` contains configuration. In particular, we must choose the region from
+<https://cloud.google.com/about/locations>. In my case, I choose Montréal `asia-southeast1-b`.
+
+<div class="formalpara-title">
+
+**File `variables.tf`**
+
+</div>
+
+``` txt
+locals {
+  data_lake_bucket = "dtc_data_lake"
+}
+
+variable "project" {
+  description = "Your GCP Project ID"
+}
+
+variable "region" {
+  description = "Region for GCP resources. Choose as per your location: https://cloud.google.com/about/locations"
+  default = "asia-southeast1-b"
+  type = string
+}
+
+variable "storage_class" {
+  description = "Storage class type for your bucket. Check official docs for more info."
+  default = "STANDARD"
+}
+
+variable "BQ_DATASET" {
+  description = "BigQuery Dataset that raw data (from GCS) will be written to"
+  type = string
+  default = "trips_data_all"
+}
+```
+Before running terraform, we must know the execution steps:
+
+1. `terraform init`: Initializes and configures the backend, installs plugins/providers, and checks out an existing configuration from a version control.
+2. `terraform plan`: Matches/previews local changes against a remote state, and proposes an Execution Plan.
+3. `terraform apply`: Asks for approval to the proposed plan, and applies changes to cloud.
+4. `terraform destroy`: Removes your stack from the Cloud.
+
+Run the following commands:
+
+``` bash
+# Refresh service-account's auth-token for this session
+$ export GOOGLE_APPLICATION_CREDENTIALS="C:/Users/cungt/.gc/ny-rides-hauct-397604-5b0b890dd98c.json"
+$ gcloud auth application-default login
+# Select your account and enter your password.
+# You should see "You are now authenticated with the gcloud CLI!"
+```
+
+Next, rather than indicating the project id in the `variables.tf` file, we will pass the Project ID at runtime. My
+project ID is **ny-rides-hauct-397604**.
+
+Execute the following commands.
+
+``` bash
+# Initialize state file (.tfstate)
+$ terraform init
+# Terraform has been successfully initialized!
+```
+![p19](images/terraform_init.png)
+
+```bash
+# Check changes to new infra plan
+$ terraform plan
+# Enter the project-id: ny-rides-hauct-397604
+```
+![p20](images/terraform_plan.png)
+
+Note that we could have passed the project id this way.
+
+``` bash
+# Check changes to new infra plan
+terraform plan -var="project=<your-gcp-project-id>"
+# Create new infra
+terraform apply -var="project=<your-gcp-project-id>"
+```
+Terraform tells that it will performa the following actions:
+
+* **google_bigquery_dataset.dataset** will be created
+* **google_storage_bucket.data-lake-bucket** will be created
+* Plan: 2 to add, 0 to change, 0 to destroy.
+
+Now, execute the following commands.
+
+``` bash
+$ terraform apply
+```
+### Setting up the environment on cloud VM
+> 2023-01-22.
+
+See [DE Zoomcamp 1.4.1 - Setting up the Environment on Google Cloud (Cloud VM + SSH
+access)](https://www.youtube.com/watch?v=ae-CV2KfoN0).
+
+Go to **Google Cloud**, in the left menu, select **Compute Engine**, **VM instances**, make sure you select the right
+project (**ny-rides-alexey-396910**), and click on the **ENABLE** button if not already done.
+
+![p20](images/vm_instance_alexey.png)
+
+We must then generate the SSH key that we will use for this instance. For more information, see:
+
+- [Providing public SSH keys to
+  instanc](https://cloud.google.com/compute/docs/instances/connecting-advanced#provide-key)
+
+- [Create SSH keys](https://cloud.google.com/compute/docs/connect/create-ssh-keys)
+
+- [Add SSH keys to VMs](https://cloud.google.com/compute/docs/connect/add-ssh-keys)
+
+- [Run Docker commands without sudo](https://github.com/sindresorhus/guides/blob/main/docker-without-sudo.md)
+
+But, first let create a folder that save all your personal key
+
+```bash
+$ mkdir .ssh
+```
+#### Generate ssh keys
+then run this to generate key
+
+```bash
+$ cd ~/.ssh
+$ ssh-keygen -t rsa -f gcp -C hauct -b 2048
+$ cat gcp.pub
+```
+#### Upload public key to GCP
+We must then provide the public key `gcp.pub` to Google Cloud. To do this, go to **Compute Engine**, **Metadata**, **SSH
+KEYS** tab, and click the **ADD SSH KEY** button.
+
+![p21](images/ssh_key.png)
+
+#### Create VM
+Then, let’s go back to **Google Cloud**, **Compute Engine**, **VM instances** then click on **CREATE INSTANCE** with the
+following choices.
+
+|                                     |                                     |
+|-------------------------------------|-------------------------------------|
+| ![p22](images/create_instance1.png) | ![p23](images/create_instance2.png) |
+
+We get this.
+
+![p24](images/create_instance3.png)
+
+#### ssh into VM
+Copy the External IP (34.142.227.31) of the instance you've created
+![p25](images/external_ip.png)
+
+go to the terminal and run the following command:
+
+```bash
+cungt@LAPTOP-2KBDAOLD MINGW64 ~
+$ ssh -i ~/.ssh/gcp hauct@34.142.227.31
+<<comment
+The authenticity of host '34.142.227.31 (34.142.227.31)' can't be established.
+ED25519 key fingerprint is SHA256:WeC9Dmo8xWwK3tdr/IT/n2/tAbijRbYeG0lwaj/0Skk.
+This host key is known by the following other names/addresses:
+    ~/.ssh/known_hosts:4: 34.87.139.49
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added '34.142.227.31' (ED25519) to the list of known hosts.
+Welcome to Ubuntu 20.04.6 LTS (GNU/Linux 5.15.0-1039-gcp x86_64)
+
+ * Documentation:  https://help.ubuntu.com
+ * Management:     https://landscape.canonical.com
+ * Support:        https://ubuntu.com/advantage
+
+  System information as of Fri Sep  1 12:27:19 UTC 2023
+
+  System load:  0.0                Users logged in:                  0
+  Usage of /:   44.6% of 28.89GB   IPv4 address for br-64f7bafc5050: 172.18.0.1
+  Memory usage: 2%                 IPv4 address for docker0:         172.17.0.1
+  Swap usage:   0%                 IPv4 address for ens4:            10.148.0.2
+  Processes:    121
+
+ * Strictly confined Kubernetes makes edge and IoT secure. Learn how MicroK8s
+   just raised the bar for easy, resilient and secure K8s cluster deployment.
+
+   https://ubuntu.com/engage/secure-kubernetes-at-the-edge
+
+Expanded Security Maintenance for Applications is not enabled.
+
+2 updates can be applied immediately.
+To see these additional updates run: apt list --upgradable
+
+Enable ESM Apps to receive additional future security updates.
+See https://ubuntu.com/esm or run: sudo pro status
+
+
+*** System restart required ***
+Last login: Wed Aug 30 09:02:51 2023 from 1.53.255.147
+comment
+(base) hauct@de-zoomcamp:~$
+```
+``` bash
+# This command allows to have information on the machine...
+(base) hauct@de-zoomcamp:~$ gcloud --version
+<<comment
+Google Cloud SDK 444.0.0
+alpha 2023.08.22
+beta 2023.08.22
+bq 2.0.97
+bundled-python3-unix 3.9.16
+core 2023.08.22
+gcloud-crc32c 1.0.0
+gsutil 5.25
+minikube 1.31.2
+skaffold 2.6.0
+comment
+(base) hauct@de-zoomcamp:~$
+```
+Download and install **Anaconda for Linux** in our instance. See
+[Downloads](https://www.anaconda.com/products/distribution#Downloads) and
+<https://repo.anaconda.com/archive/Anaconda3-2023.07-2-Linux-x86_64.sh>.
+
+``` bash
+hauct@de-zoomcamp:~$ wget https://repo.anaconda.com/archive/Anaconda3-2023.07-2-Linux-x86_64.sh
+hauct@de-zoomcamp:~$ bash Anaconda3-2023.07-2-Linux-x86_64.sh
+# Read and accept license.
+hauct@de-zoomcamp:~$ ls
+# Anaconda3-2023.07-2-Linux-x86_64.sh  anaconda3  snap
+```
+
+Now we logout the sever
+
+```bash
+hauct@de-zoomcamp:~$ logout
+```
+
+#### Configure VM and setup local \C:/Users/cungt/.ssh/config
+Next, create the `C:/Users/cungt/.ssh/config` file on my Windows with this information:
+
+<div class="formalpara-title">
+
+**Fichier `C:/Users/cungt/.ssh/config`**
+
+</div>
+
+``` txt
+Host de-zoomcamp:
+    HostName 34.142.227.31
+    User hauct
+    IdentityFile C:/Users/cungt/.ssh/gcp
+    LocalForward 5432 localhost:5432
+```
+
+Then, we only have this command to do to enter the server:
+
+``` bash
+$ ssh de-zoomcamp
+```
+In Linux server, we can do this command to know where is python.
+
+``` bash
+(base) hauct@de-zoomcamp:~$ which python
+/home/hauct/anaconda3/bin/python
+(base) hauct@de-zoomcamp:~$
+```
+
+Now let’s install Docker.
+
+``` bash
+hauct@de-zoomcamp:~$ sudo apt-get update
+hauct@de-zoomcamp:~$ sudo apt-get install docker.io
+```
+
+#### ssh with VS Code
+In VS Code, find and install the **Remote - SSH** extension. Then go to the **Command Palette** (kbd:\[Shift+Cmd+P\])
+and select **Remote-SSH: Connect to Host…​** and **de-zoomcamp**.
+
+![p26](images/vs_connect_host1.png)
+
+We now have VS Code pointing to the server.
+
+![p27](images/vs_connect_host2.png)
+
+We need to make a clone of the github on the server.
+
+``` bash
+(base) hauct@de-zoomcamp:~$ git clone https://github.com/hauct/de-zoomcamp.git
+<<comment
+Cloning into 'de-zoomcamp'...
+remote: Enumerating objects: 2520, done.
+remote: Counting objects: 100% (221/221), done.
+remote: Compressing objects: 100% (140/140), done.
+remote: Total 2520 (delta 83), reused 170 (delta 48), pack-reused 2299
+Receiving objects: 100% (2520/2520), 1.29 MiB | 17.17 MiB/s, done.
+Resolving deltas: 100% (1373/1373), done.
+comment
+(base) hauct@de-zoomcamp:~$
+```
+
+Next, we need to authorize docker. Go on at [Run Docker commands without
+sudo](https://github.com/sindresorhus/guides/blob/main/docker-without-sudo.md) for instructions.
+
+On the server, run the following commands:
+
+``` bash
+(base) hauct@de-zoomcamp:~$ sudo groupadd docker
+(base) hauct@de-zoomcamp:~$ sudo gpasswd -a $USER docker
+(base) hauct@de-zoomcamp:~$ sudo service docker restart
+(base) hauct@de-zoomcamp:~$ logout
+$ ssh de-zoomcamp
+(base) hauct@de-zoomcamp:~$ docker run hello-world
+(base) hauct@de-zoomcamp:~$ docker run -it ubuntu bash
+<<comment
+Unable to find image 'ubuntu:latest' locally
+latest: Pulling from library/ubuntu
+6e3729cf69e0: Pull complete
+Digest: sha256:27cb6e6ccef575a4698b66f5de06c7ecd61589132d5a91d098f7f3f9285415a9
+Status: Downloaded newer image for ubuntu:latest
+comment
+root@e2ee01058851:/# ls
+bin   dev  home  lib32  libx32  mnt  proc  run   srv  tmp  var
+boot  etc  lib   lib64  media   opt  root  sbin  sys  usr
+root@e2ee01058851:/# exit
+# exit
+(base) hauct@de-zoomcamp:~$
+```
+Now let’s install Docker Compose. Go to <https://github.com/docker/compose>, select the **latest releases**, and
+**docker-compose-linux-x86_64**, copy the link.
+
+In the server, do the following commands:
+
+``` bash
+(base) hauct@de-zoomcamp:~$ mkdir bin
+(base) hauct@de-zoomcamp:~$ cd bin
+(base) hauct@de-zoomcamp:~/bin$ wget https://github.com/docker/compose/releases/download/v2.15.0/docker-compose-linux-x86_64 -O docker-compose
+(base) hauct@de-zoomcamp:~/bin$ ls
+# docker-compose
+(base) hauct@de-zoomcamp:~/bin$ chmod +x docker-compose
+(base) hauct@de-zoomcamp:~/bin$ ./docker-compose version
+# Docker Compose version v2.15.0
+(base) hauct@de-zoomcamp:~/bin$ cd
+(base) hauct@de-zoomcamp:~$ nano .bashrc
+```
+
+We need to add the `/bin` directory to the `PATH` by addind this instruction at the bottom of the `.bashrc` file:
+
+``` bash
+export PATH="${HOME}/bin:${PATH}"
+```
+
+![p28](images/nano_bashrc.png)
+
+Do kbd:\[Ctrl+O\] and kbd:\[Enter\] to save and kbd:\[Ctrl+X\] to quit. Then issue the `source .bashrc` command.
+This will help re-update `.bashrc` file
+
+Now we will run `docker-compose` to create a container that have `PostgresSQL` and `pgAdmin` on this server (VM)
+
+Change to the working directory `~/de-zoomcamp/week_1_basics_n_setup/2_docker_sql`
+and run this following scripts
+
+``` bash
+(base) hauct@de-zoomcamp:~$ cd ~/de-zoomcamp/week_1_basics_n_setup/2_docker_sql
+(base) hauct@de-zoomcamp:~/de-zoomcamp/week_1_basics_n_setup/2_docker_sql$ ls
+# Dockerfile  docker-compose.yaml    pg-test-connection.ipynb  upload-data.ipynb  yellow_tripdata_2021-01.csv
+# README.md   my_taxi_postgres_data  scripts.txt               upload-data.py
+(base) hauct@de-zoomcamp:~/de-zoomcamp/week_1_basics_n_setup/2_docker_sql$ docker-compose up -d
+# [+] Running 2/2
+ # ✔ Container 2_docker_sql-pgadmin-1     Started                                                                                                    0.0s 
+ # ✔ Container 2_docker_sql-pgdatabase-1  Started                                                                                                    0.0s 
+(base) hauct@de-zoomcamp:~/de-zoomcamp/week_1_basics_n_setup/2_docker_sql$ 
+```
+
+To check running container:
+```bash
+(base) hauct@de-zoomcamp:~/de-zoomcamp/week_1_basics_n_setup/2_docker_sql$ docker ps
+# CONTAINER ID   IMAGE            COMMAND                  CREATED      STATUS              PORTS                                            NAMES
+# 92bf80a9e249   dpage/pgadmin4   "/entrypoint.sh"         4 days ago   Up About a minute   443/tcp, 0.0.0.0:8080->80/tcp, :::8080->80/tcp   2_docker_sql-pgadmin-1
+# 45671e6e71bf   postgres:13      "docker-entrypoint.s…"   4 days ago   Up About a minute   0.0.0.0:5432->5432/tcp, :::5432->5432/tcp        2_docker_sql-pgdatabase-1
+```
+
+#### Install pgcli (use conda)
+We must now install **pgcli**. I will user the method **conda**
+
+```bash
+(base) hauct@de-zoomcamp:~$ conda install -c conda-forge pgcli
+(base) hauct@de-zoomcamp:~$ pip install -U mycli
+```
+
+#### Setup port forwarding to local machine
+The instruction says to open a **PORT 5432** in the server’s VS Code. In your VS code, if you haven't fowarded server port to you local port, follow this instruction to forward a port
+
+|                                 |                                 |
+|---------------------------------|---------------------------------|
+| ![p29](images/foward_port1.png) | ![p30](images/foward_port2.png) |
+
+Now, I can now use pgcli on the client side (i.e. on my Windows) to access the database located on the server.
+
+![p30](images/vs_connected.png)
+
+We also open the **PORT 8080** (pgAdmin).
+Image `pgAdmin` has been running on our container, so we just need to forward on VS Code.
+
+
+This is the completely ports setting
+
+![p32](images/vs_complete_ports.png)
+
+In VS Code of the server, in order to check the data later ,I open **PORT 8080** and I open <http://localhost:8080> on my Windows and pgAdmin appears.
+Enter the username `admin@admin.com` and the password `root`.
+
+#### Run Jupyter to run upload-data notebook
+We need to open the **PORT 8888** (Jupyter notebook) in the server's VS Code.
+
+Before you foward `Jupyter notebook` port, run this scrip on server's terminal
+
+
+
+``` bash
+(base) hauct@de-zoomcamp:~$ ~/de-zoomcamp/week_1_basics_n_setup/2_docker_sql
+(base) hauct@de-zoomcamp:~$ jupyter notebook
+```
+
+![p31](images/sever_jn.png)
+
+Now, I can start jupyter on the server side. Open <http://localhost:8888//?token> and open `upload-data.ipynb`.
+
+On the server, I can download the following files.
+
+``` bash
+(base) hauct@de-zoomcamp:~$ wget https://d37ci6vzurychx.cloudfront.net/trip-data/yellow_tripdata_2021-01.parquet
+```
+
+**Note**: In file `upload-data.ipynb`, i added the code downloading the data above.
+
+We can now check if we can load data into a postgres table with this python code in jupyter.
+
+``` python
+import pandas as pd
+
+!pip install pyarrow
+!pip install psycopg2-binary
+
+df = pd.read_csv('yellow_tripdata_2021-01.csv.gz', nrows=100)
+
+df.tpep_pickup_datetime = pd.to_datetime(df.tpep_pickup_datetime)
+df.tpep_dropoff_datetime = pd.to_datetime(df.tpep_dropoff_datetime)
+
+from sqlalchemy import create_engine
+
+engine = create_engine('postgresql://root:root@localhost:5432/ny_taxi')
+engine.connect()
+
+df.head(n=0).to_sql(name='yellow_taxi_data', con=engine, if_exists='replace')
+```
+
+Check if the table exists on the server.
+
+``` bash
+$ pgcli -h localhost -U root -d ny_taxi
+Server: PostgreSQL 13.12 (Debian 13.12-1.pgdg120+1)
+Version: 3.5.0
+Home: http://pgcli.com
+root@localhost:ny_taxi> \dt
++--------+------------------+-------+-------+
+| Schema | Name             | Type  | Owner |
+|--------+------------------+-------+-------|
+| public | yellow_taxi_data | table | root  |
++--------+------------------+-------+-------+
+SELECT 1
+Time: 0.067s
+```
+#### Install Terraform
+We now need to install Terraform. One should get the zip file link from https://developer.hashicorp.com/terraform/downloads. We must take AMD64.
+
+``` bash
+(base) hauct@de-zoomcamp:~$ cd bin
+(base) hauct@de-zoomcamp:~$ ls
+# docker-compose
+(base) hauct@de-zoomcamp:~/bin$ wget https://releases.hashicorp.com/terraform/1.3.7/terraform_1.5.6_linux_amd64.zip
+(base) hauct@de-zoomcamp:~/bin$ ls
+# docker-compose  terraform_1.5.6_linux_amd64.zip
+(base) hauct@de-zoomcamp:~/bin$ sudo apt-get install unzip
+(base) hauct@de-zoomcamp:~/bin$ unzip terraform_1.5.6_linux_amd64.zip
+# Archive:  terraform_1.5.6_linux_amd64.zip
+#   inflating: terraform
+(base) hauct@de-zoomcamp:~/bin$ rm terraform_1.5.6_linux_amd64.zip
+(base) hauct@de-zoomcamp:~/bin$ ls
+docker-compose  terraform  # terraform is green so it's an executable.
+(base) hauct@de-zoomcamp:~/bin$ terraform -version
+Terraform v1.5.6
+on linux_amd64
+(base) hauct@de-zoomcamp:~/bin$
+```
+
+#### sftp Google credentials to VM
+Now I want to upload my `C:/Users/cungt/.gc/ny-rides-hauct-397604-5b0b890dd98c.json` file to the server. To do
+this, run the following command from the terminal on my Windows
+
+``` bash
+scp -i ~/.ssh/gcp ~/.gc/ny-rides-hauct-397604-5b0b890dd98c.json hauct@34.142.227.31:~
+```
+
+**Note**: This script has the format:
+``` bash
+scp -i [path_to_private_key] [local_file_path] [user]@[vm_external_ip]:[remote_file_path]
+```
+and then VS Code of the server, run this script to move the file to `.gc` folder:
+
+``` bash
+# Create `.gc` folder
+(base) hauct@de-zoomcamp:~$ mkdir .gc
+(base) hauct@de-zoomcamp:~$ mv ny-rides-hauct-397604-5b0b890dd98c.json .gc/
+```
+
+#### Configure gcloud
+Run these commands on the server.
+
+``` bash
+(base) hauct@de-zoomcamp:~$ cd ~/de-zoomcamp/week_1_basics_n_setup/1_terraform_gcp/terraform
+(base) hauct@de-zoomcamp:~/de-zoomcamp/week_1_basics_n_setup/1_terraform_gcp/terraform$ export GOOGLE_APPLICATION_CREDENTIALS=~/.gc/ny-rides-hauct-397604-5b0b890dd98c.json
+(base) hauct@de-zoomcamp:~/de-zoomcamp/week_1_basics_n_setup/1_terraform_gcp/terraform$ gcloud auth activate-service-account --key-file $GOOGLE_APPLICATION_CREDENTIALS
+# Activated service account credentials for: [ny-rides-viewer@ny-rides-hauct-397604.iam.gserviceaccount.com]
+(base) hauct@de-zoomcamp:~/de-zoomcamp/week_1_basics_n_setup/1_terraform_gcp/terraform$ 
+```
+
+#### Run Terraform commands
+
+On the server, I need to change the region in the `variable.tf` file in the `terraform` directory. I can also define a
+variable containing my project id.
+
+Now, run these scripts:
+```bash
+(base) hauct@de-zoomcamp:~/de-zoomcamp/week_1_basics_n_setup/1_terraform_gcp/terraform$ terraform init
+(base) hauct@de-zoomcamp:~/de-zoomcamp/week_1_basics_n_setup/1_terraform_gcp/terraform$ terraform plan
+(base) hauct@de-zoomcamp:~/de-zoomcamp/week_1_basics_n_setup/1_terraform_gcp/terraform$ terraform apply
+```
+#### Shut down VM
+
+To stop the server, do this command:
+
+``` bash
+(base) hauct@de-zoomcamp:~$ sudo shutdown
+# Shutdown scheduled for Fri 2023-09-01 16:55:35 UTC, use 'shutdown -c' to cancel.
+(base) hauct@de-zoomcamp:~$
+```
+
+It is also recommended to **STOP** on the instance in the Google Cloud interface.
+
+Go to **Google Cloud**, in the left menu, select **Compute Engine**, **VM instances**, make sure you select the right project (**ny-rides-alexey**), and click on **STOP**.
+
+![p32](images/vm_instance_shutdown.png)
+
+#### Start VM back up and update \~/.ssh/config
+
+You can restart the instance by clicking on **START** of the instance in the Google Cloud interface.
+
+Usually, you will get a new **External ID**, which require to re-edit in the `~/.ssh/config` file.
+
+Oddly, I get the same IP address, so I don’t need to change the config file.
+
+<div class="formalpara-title">
+
+**Fichier `~/.ssh/config`**
+
+</div>
+
+``` bash
+Host de-zoomcamp:
+    HostName 34.142.227.31
+    User hauct
+    IdentityFile C:/Users/cungt/.ssh/gcp
+    LocalForward 5432 localhost:5432
+```
+
+Then I can access the server the same way.
+
+``` bash
+$ ssh de-zoomcamp
+```
+
+And we find our instance with all the software installed.
+
+#### Delete VM
+
+The instructor destroys the instance by clicking on **DELETE** next to the instance.
+
+#### Explanation of GCP charges
+
+The instructor explains to us that we pay for the CPU and for the storage used.
+
+## See also
+
+* [Fixing TLC Yellow Taxi 2019 Data Parquet Errors Loading Into Big Query](https://www.youtube.com/watch?v=wkgDUsDZKfg)
+* [SSH Simplified: Aliasing Credentials with Config Files](https://itsadityagupta.hashnode.dev/ssh-simplified-aliasing-credentials-with-config-files)
