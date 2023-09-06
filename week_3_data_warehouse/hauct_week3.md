@@ -220,16 +220,247 @@ information.
 
 ![p75](images/bq-partition.png)
 
+We use this SQL code to create two type of table, `yellow_tripdata_non_partitoned` and `yellow_tripdata_partitoned`
+
 **File `big_query.sql`**
 
 ``` sql
 -- Create a non partitioned table from external table
-CREATE OR REPLACE TABLE ny-rides-alexey-396910.nytaxi.yellow_tripdata_non_partitoned AS
+CREATE OR REPLACE TABLE ny-rides-alexey-396910.nytaxi.yellow_tripdata_non_partitioned AS
 SELECT * FROM ny-rides-alexey-396910.nytaxi.external_yellow_tripdata;
 
 -- Create a partitioned table from external table
-CREATE OR REPLACE TABLE ny-rides-alexey-396910.nytaxi.yellow_tripdata_partitoned
+CREATE OR REPLACE TABLE ny-rides-alexey-396910.nytaxi.yellow_tripdata_partitioned
 PARTITION BY
   DATE(tpep_pickup_datetime) AS
 SELECT * FROM ny-rides-alexey-396910.nytaxi.external_yellow_tripdata;
 ```
+
+And now, i will try to check the peformance of one same query on two tables
+
+```sql
+SELECT DISTINCT(VendorID)
+FROM ny-rides-alexey-396910.nytaxi.yellow_tripdata_non_partitioned
+WHERE DATE(tpep_pickup_datetime) BETWEEN '2019-06-01' AND '2019-06-30';
+
+SELECT DISTINCT(VendorID)
+FROM ny-rides-alexey-396910.nytaxi.yellow_tripdata_partitioned
+WHERE DATE(tpep_pickup_datetime) BETWEEN '2019-06-01' AND '2019-06-30';
+```
+
+The result on partitioned table is faster than on non_partitioned one
+
+|                                           |                                          |
+|-------------------------------------------|------------------------------------------|
+| ![p76](images/bq-non-partitions-query.png)| ![p77](images/bq-partitions-query.png)   |
+
+### BigQuery Clustering
+
+Clustered tables in BigQuery are tables that have a user-defined column sort order using clustered columns. Clustered
+tables can improve query performance and reduce query costs.
+
+In BigQuery, a clustered column is a user-defined table property that sorts storage blocks based on the values in the
+clustered columns. The storage blocks are adaptively sized based on the size of the table. A clustered table maintains
+the sort properties in the context of each operation that modifies it. Queries that filter or aggregate by the clustered
+columns only scan the relevant blocks based on the clustered columns instead of the entire table or table partition. As
+a result, BigQuery might not be able to accurately estimate the bytes to be processed by the query or the query costs,
+but it attempts to reduce the total bytes at execution.
+
+See [Introduction to clustered tables](https://cloud.google.com/bigquery/docs/clustered-tables).
+
+- Columns you specify are used to colocate related data
+- Order of the column is important
+- The order of the specified columns determines the sort order of the data.
+- Clustering improves
+  - Filter queries
+  - Aggregate queries
+- Table with data size \< 1 GB, don’t show significant improvement with partitioning and clustering
+- You can specify up to four clustering columns
+
+Clustering columns must be top-level, non-repeated columns:
+
+- `DATE`
+- `BOOL`
+- `GEOGRAPHY`
+- `INT64`
+- `NUMERIC`
+- `BIGNUMERIC`
+- `STRING`
+- `TIMESTAMP`
+- `DATETIME`
+
+**Clustering in BigQuery**
+
+![p78](images/bq-clustering.png)
+
+We will create `yellow_tripdata_partitoned_clustered`, which has a cluster is `VendorID`
+
+```sql
+-- Creating a partition and cluster table
+CREATE OR REPLACE TABLE ny-rides-alexey-396910.nytaxi.yellow_tripdata_partitoned_clustered
+PARTITION BY DATE(tpep_pickup_datetime)
+CLUSTER BY VendorID AS
+SELECT * FROM ny-rides-alexey-396910.nytaxi.external_yellow_tripdata;
+```
+
+And now, we will try to check the peformance of the clusted table and partitioned one above, in one same query
+
+```sql
+SELECT count(*) as trips
+FROM ny-rides-alexey-396910.nytaxi.yellow_tripdata_partitioned
+WHERE DATE(tpep_pickup_datetime) BETWEEN '2019-06-01' AND '2019-06-30'
+  AND VendorID=1;
+
+SELECT count(*) as trips
+FROM ny-rides-alexey-396910.nytaxi.yellow_tripdata_partitoned_clustered
+WHERE DATE(tpep_pickup_datetime) BETWEEN '2019-06-01' AND '2019-06-30'
+  AND VendorID=1;
+```
+
+The result is not quite a difference, maybe it's because the size of our table is < 1Gb
+
+|                                  |                                          |
+|----------------------------------|------------------------------------------|
+| ![p78](images/bq-partition-1.png)| ![p79](images/bq-clustering.png-1.png)   |
+
+
+### Partitioning vs Clustering
+
+
+| **Clustering**  | **Partitoning** |
+|---------------------------------------------------------------------------------------|---------------------------------------|
+| Cost benefit unknown. | Cost known upfront. |
+| You need more granularity than partitioning alone allows. | You need partition-level management.  |
+| Your queries commonly use filters or aggregation against multiple particular columns. | Filter or aggregate on single column. |
+| The cardinality of the number of values in a column or group of columns is large. | |
+
+### Clustering over paritioning
+
+Like clustering, partitioning uses user-defined partition columns to specify how data is partitioned and what data is
+stored in each partition. Unlike clustering, partitioning provides granular query cost estimates before you run a query.
+
+See [Introduction to clustered tables](https://cloud.google.com/bigquery/docs/clustered-tables).
+
+- Partitioning results in a small amount of data per partition (approximately less than 1 GB).
+- Partitioning results in a large number of partitions beyond the limits on partitioned tables.
+- Partitioning results in your mutation operations modifying the majority of partitions in the table frequently (for
+  example, every few minutes).
+
+### Automatic reclustering
+
+As data is added to a clustered table
+
+- The newly inserted data can be written to blocks that contain key ranges that overlap with the key ranges in
+  previously written blocks
+- These overlapping keys weaken the sort property of the table
+
+To maintain the performance characteristics of a clustered table
+
+- BigQuery performs automatic re-clustering in the background to restore the sort property of the table
+- For partitioned tables, clustering is maintained for data within the scope of each partition.
+
+### BigQuery Best Practice
+
+- Cost reduction
+  - Avoid `SELECT *`
+  - Price your queries before running them
+  - Use clustered or partitioned tables
+  - Use streaming inserts with caution
+  - Materialize query results in stages
+
+In BigQuery, materialized views are precomputed views that periodically cache the results of a query for increased
+performance and efficiency. BigQuery leverages precomputed results from materialized views and whenever possible reads
+only delta changes from the base tables to compute up-to-date results. See [Introduction to materialized
+views](https://cloud.google.com/bigquery/docs/materialized-views-intro)
+
+- Query performance
+  - Filter on partitioned columns
+  - Denormalizing data
+  - Use nested or repeated columns
+  - Use external data sources appropriately
+  - Don’t use it, in case u want a high query performance
+  - Reduce data before using a `JOIN`
+  - Do not treat `WITH` clauses as prepared statements
+  - Avoid oversharding tables
+
+- Query performance
+  - Avoid JavaScript user-defined functions
+  - Use approximate aggregation functions (HyperLogLog++)
+  - Order Last, for query operations to maximize performance
+  - Optimize your join patterns
+  - As a best practice, place the table with the largest number of rows first, followed by the table with the fewest
+  rows, and then place the remaining tables by decreasing size.
+
+
+### Internals of BigQuery
+
+**A high-level architecture for BigQuery service**
+
+![p80](images/bq-high-level.png)
+
+See also:
+
+- [BigQuery under the hood](https://cloud.google.com/blog/products/bigquery/bigquery-under-the-hood)
+- [A Deep Dive Into Google BigQuery Architecture](https://panoply.io/data-warehouse-guide/bigquery-architecture/)
+- [BigQuery explained: An overview of BigQuery’s
+  architecture](https://cloud.google.com/blog/products/data-analytics/new-blog-series-bigquery-explained-overview)
+
+**Record-oriented vs column-oriented**
+
+![p81](images/bq-record-vs-column.png)
+
+BigQuery stores table data in columnar format, meaning it stores each column separately. Column-oriented databases are
+particularly efficient at scanning individual columns over an entire dataset.
+
+Column-oriented databases are optimized for analytic workloads that aggregate data over a very large number of records.
+Often, an analytic query only needs to read a few columns from a table. See [Overview of BigQuery
+storage](https://cloud.google.com/bigquery/docs/storage_overview) and [Storage
+layout](https://cloud.google.com/bigquery/docs/storage_overview#storage_layout).
+
+**An example of Dremel serving tree**
+
+![p82](images/dremel-serving-tree.png)
+
+### BigQuery References
+
+- [BigQuery How-to-guides](https://cloud.google.com/bigquery/docs/how-to)
+- [Dremel: Interactive Analysis of Web-Scale Datasets](https://research.google/pubs/pub36632/)
+- [A Deep Dive Into Google BigQuery Architecture](https://panoply.io/data-warehouse-guide/bigquery-architecture/)
+- [A Look at Dremel](http://www.goldsborough.me/distributed-systems/2019/05/18/21-09-00-a_look_at_dremel/)
+
+## BigQuery ML
+
+### Overwiew
+
+BigQuery ML lets you create and execute machine learning models in BigQuery using standard SQL queries. BigQuery ML
+democratizes machine learning by letting SQL practitioners build models using existing SQL tools and skills. BigQuery ML
+increases development speed by eliminating the need to move data.
+
+See [What is BigQuery ML?](https://cloud.google.com/bigquery-ml/docs/introduction#supported_models_in)
+
+- Target audience Data analysts, managers
+- No need for Python or Java knowledge
+- No need to export data into a different system
+
+- Free
+  - 10 GB per month of data storage
+  - 1 TB per month of queries processed
+  - ML Create model step: First 10 GB per month is free
+- [BigQuery ML pricing](https://cloud.google.com/bigquery/pricing#bqml)
+
+![p83](images/bq-ml-pipelines.png)
+
+Supervised (labeled) machine learning model study design overview. Steps for the deployment of a supervised machine
+learning model. From left to right, the figure shows the initial team of multidisciplinary experts defining a study
+design to address a need. Data are then collected, processed, trained tested, validated, and ultimately deployed. See
+Rashidi, Hooman & Tran, Nam & Betts, Elham & Howell, Lydia & Green, Ralph. (2019). [Artificial Intelligence and Machine
+Learning in Pathology: The Present Landscape of Supervised
+Methods](https://www.researchgate.net/publication/335604816_Artificial_Intelligence_and_Machine_Learning_in_Pathology_The_Present_Landscape_of_Supervised_Methods).
+
+### Model selection guide
+
+**Model selection guide**
+
+![p84](images/bq-model-selection.png)
+
+See [Model selection guide](https://cloud.google.com/bigquery-ml/docs/introduction#model_selection_guide).
