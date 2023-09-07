@@ -90,15 +90,16 @@ Let’s first create a conda environment. We need a python requirements file.
 </div>
 
 ``` txt
-pandas==1.5.2
-prefect==2.7.7
-prefect-sqlalchemy==0.2.2
-prefect-gcp[cloud_storage]==0.2.4
-protobuf==4.21.11
-pyarrow==10.0.1
-pandas-gbq==0.18.1
-psycopg2-binary==2.9.5
-sqlalchemy==1.4.46
+pandas
+pydantic
+prefect
+prefect-sqlalchemy
+prefect-gcp[cloud_storage]
+protobuf
+pyarrow
+pandas-gbq
+psycopg2-binary
+sqlalchemy
 ```
 
 Use conda to create a working environment `de-zoomcamp`
