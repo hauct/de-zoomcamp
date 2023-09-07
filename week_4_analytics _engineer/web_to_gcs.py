@@ -108,11 +108,6 @@ def clean(color: str, df: pd.DataFrame) -> pd.DataFrame:
     payment_type             float64 (2019=int64)
     trip_type                float64 (2019=int64)
     congestion_surcharge     float64
-
-    fhv 2019
-    dispatching_base_num,pickup_datetime,dropOff_datetime,PUlocationID,DOlocationID,SR_Flag,Affiliated_base_number
-    fhv 2020
-    dispatching_base_num,pickup_datetime,dropoff_datetime,PULocationID,DOLocationID,SR_Flag,Affiliated_base_number
     """
 
     if color == "yellow":
@@ -133,20 +128,6 @@ def clean(color: str, df: pd.DataFrame) -> pd.DataFrame:
         df["DOLocationID"] = df["DOLocationID"].astype('Int64')
         df["passenger_count"] = df["passenger_count"].astype('Int64')
         df["payment_type"] = df["payment_type"].astype('Int64')
-
-    if color == "fhv":
-        """Rename columns"""
-        df.rename({'dropoff_datetime':'dropOff_datetime'}, axis='columns', inplace=True)
-        df.rename({'PULocationID':'PUlocationID'}, axis='columns', inplace=True)
-        df.rename({'DOLocationID':'DOlocationID'}, axis='columns', inplace=True)
-
-        """Fix dtype issues"""
-        df["pickup_datetime"] = pd.to_datetime(df["pickup_datetime"])
-        df["dropOff_datetime"] = pd.to_datetime(df["dropOff_datetime"])
-
-        # See https://pandas.pydata.org/docs/user_guide/integer_na.html
-        df["PUlocationID"] = df["PUlocationID"].astype('Int64')
-        df["DOlocationID"] = df["DOlocationID"].astype('Int64')
 
     print(f"rows: {len(df)}")
     return df
@@ -180,7 +161,7 @@ def upload_to_gcs(bucket: str, object_name: str, local_file: str) -> None:
 @flow()
 def etl_web_to_gcs() -> None:
     """The main ETL function"""
-    colors = ["yellow", "green", "fhv"]
+    colors = ["yellow", "green"]
     years = ['2019', '2020']
 
     for color in colors:
