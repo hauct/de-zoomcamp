@@ -344,7 +344,7 @@ service account in your taxi project
 
 Click on **DONE** button.
 
-I reuse the json file (`hopeful-summer-375416-c150de675a7d.json`) created in the previous weeks.
+I reuse the json file (`ny-rides-alexey-396910-e520f0a301d7.json`) created in the previous weeks.
 
 ![w4s11](dtc/w4s11.png)
 

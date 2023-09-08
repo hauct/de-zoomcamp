@@ -304,3 +304,54 @@ if __name__ == "__main__":
 After running nicely done, we will have our data on Google Bucket
 
 ![p87](images/gcp-data-prepared.png)
+
+Then, in BigQuery, I created the tables `yellow_tripdata` and `green_tripdata` like this.
+
+![p88](images/bq-create-tables.png)
+
+I now see the two tables under `trips_data_all`.
+
+![p89](images/bq-tables-created.png)
+
+To check if everything is correct, I counted the number of rows of each of the tables.
+
+``` sql
+SELECT COUNT(*) FROM `ny-rides-alexey-396910.trips_data_all.yellow_tripdata`;
+--- 61,306,914
+
+SELECT COUNT(*) FROM `ny-rides-alexey-396910.trips_data_all.green_tripdata`;
+--- 4,523,925
+```
+
+### Setting up dbt with BigQuery (Alternative A)
+
+On September 8, 2023, I created a free dbt account with BigQuery. Then I followed the instructions in this file
+([dbt_cloud_setup.md](https://github.com/DataTalksClub/data-engineering-zoomcamp/blob/main/week_4_analytics_engineering/dbt_cloud_setup.md)).
+
+In order to connect we need the service account JSON file generated from bigquery:
+
+**Step 1**: Open the [BigQuery credential wizard](https://console.cloud.google.com/apis/credentials/wizard) to create a
+service account in your taxi project
+
+- **Select an API**: BigQuery API
+- **What data will you be accessing?**: Application data
+- **Are you planning to use this API with Compute Engine…​?** No, I’n not using them
+- **Service account details**: dbt-service-account
+- **Service account ID**: dbt-service-account (Email address:
+  <dbt-service-account@hopeful-summer-375416.iam.gserviceaccount.com>)
+- **Service account description**: Service account for dbt cloud
+- **Role**: BigQuery Data Editor
+- **Role**: BigQuery Job User
+- **Role**: BigQuery User
+- **Role**: BigQuery Admin
+
+Click on **DONE** button.
+
+I reuse the json file (`ny-rides-alexey-396910-e520f0a301d7.json`) created in the previous weeks.
+
+Go to web page [dbt](https://www.getdbt.com/), login your dbt account and select `BigQuery` connection, upload your json file here
+
+|                                     |                                          |
+|-------------------------------------|------------------------------------------|
+|![p90](images/dbt-bq-connection1.png)|![Alt text](images/dbt-bq-connection2.png)|
+
