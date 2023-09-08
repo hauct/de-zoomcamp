@@ -353,5 +353,204 @@ Go to web page [dbt](https://www.getdbt.com/), login your dbt account and select
 
 |                                     |                                          |
 |-------------------------------------|------------------------------------------|
-|![p90](images/dbt-bq-connection1.png)|![Alt text](images/dbt-bq-connection2.png)|
+|![p90](images/dbt-bq-connection1.png)|![p91](images/dbt-bq-connection2.png)     |
+
+## Introduction to analytics engineering
+
+### What is Analytics Engineering?
+
+Roles in a data team:
+
+- Data Engineer: Prepares and maintain the infrastructure the data team needs.
+- Analytics Engineer: Introduces the good software engineering practices to the efforts of data analysts and data
+  scientists
+- Data Analyst: Uses data to answer questions and solve problems.
+
+Tooling:
+
+1. Data Loading
+2. Data Storing (Cloud data warehouses like [Snowflake](https://www.snowflake.com/en/),
+    [Bigquery](https://cloud.google.com/bigquery), [Redshift](https://aws.amazon.com/fr/redshift/))
+3. Data modelling (Tools like dbt or Dataform)
+4. Data presentation (BI tools like google data studio, [Looker](https://www.looker.com/), [Mode](https://mode.com/) or
+    Tableau)
+
+### Data Modelling concepts
+
+In the ELP approach, we will transform the data once the date is already in the data warehouse.
+
+<table>
+<tr><td>
+<img src="images/etl.png">
+</td><td>
+<img src="images/elt.png">
+</td></tr>
+</table>
+
+**ETL vs ELT**
+
+- ETL
+  - Slightly more stable and compliant data analysis
+  - Higher storage and compute costs
+- ELT
+  - Faster and more flexible data analysis.
+  - Lower cost and lower maintenance
+
+### Kimball’s Dimensional Modeling
+
+- Objective
+  - Deliver data understandable to the business users
+  - Deliver fast query performance
+- Approach
+  - Prioritise user understandability and query performance over non redundant data (3NF)
+- Other approaches
+  - Bill Inmon
+  - Data vault
+
+### Elements of Dimensional Modeling
+
+- Facts tables
+  - Measurements, metrics or facts
+  - Corresponds to a business *process*
+  - "verbs"
+- Dimensions tables
+  - Corresponds to a business *entity*
+  - Provides context to a business process
+  - "nouns"
+
+![p92](images/star_schema.jpg)
+
+### Architecture of Dimensional Modeling
+
+- Stage Area
+  - Contains the raw data
+  - Not meant to be exposed to everyone
+- Processing area
+  - From raw data to data models
+  - Focuses in efficiency
+  - Ensuring standards
+- Presentation area
+  - Final presentation of the data
+  - Exposure to business stakeholder
+
+## What is dbt?
+
+[dbt](https://docs.getdbt.com/docs/introduction) is a transformation tool that allows anyone that knows SQL to deploy
+analytics code following software engineering best practices like modularity, portability, CI/CD, and documentation.
+
+### How does dbt work?
+
+![p93](images/dbt-work.png)
+
+- Each model is:
+  - A `*.sql` file
+  - Select statement, no DDL (*Data Definition Language*) or DML (*Data Manipulation Language*)
+  - A file that dbt will compile and run in our DWH (*Data warehouse*)
+
+### How to use dbt?
+
+- **dbt Core**: Open-source project that allows the data transformation.
+  - Builds and runs a dbt project (.sql and .yml files)
+  - Includes SQL compilation logic, macros and database adapters
+  - Includes a CLI (*Command Line Interface*) interface to run dbt commands locally
+  - Opens source and free to use
+- **dbt Cloud**: SaaS (*Software As A Service*) application to develop and manage dbt projects.
+  - Web-based IDE (*Integrated Development Environment*) to develop, run and test a dbt project
+  - Jobs orchestration
+  - Logging and Alerting
+  - Integrated documentation
+  - Free for individuals (one developer seat)
+
+### How are we going to use dbt?
+
+- **BigQuery (Alternative A)**:
+  - Development using cloud IDE
+  - No local installation of dbt core
+- **Postgres (Alternative B)**:
+  - Development using a local IDE of your choice.
+  - Local installation of dbt core connecting to the Postgres database
+  - Running dbt models through the CLI
+
+At the end, our project will look like this.
+
+![p94](images/flow.png)
+
+## Starting a dbt project
+
+### Create a new dbt project
+
+dbt provides an [starter project](https://github.com/dbt-labs/dbt-starter-project) with all the basic folders and files.
+
+**Starter project structure**
+
+``` txt
+taxi_rides_ny/
+  analyses/
+  macros/
+  models/example/
+  snapshots/
+  seeds/
+  tests/
+  .gitignore
+  README.md
+  dbt_project.yml
+```
+
+**Example of `dbt_project.yml`**
+
+``` yaml
+name: 'taxi_rides_ny'
+version: '1.0.0'
+config-version: 2
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'pg-dbt-workshop'  # Using Postgres + dbt core (locally) (Alternative B)
+profile: 'default'          # Using BigQuery + dbt cloud (Alternative A)
+
+# These configuration specify where dbt should look for different types of files.
+# The `source-paths` config, for example, states that models in this project can be
+# found in the "models/" directory. You probably win't need to change these!
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"  # directory which will store compiled SQL files
+clean-targets:         # directories to be removed by `dbt clean`
+    - "target"
+    - "dbt_packages"
+
+# Configuring models
+# Full decumentation: https://docs.getdbt.com/reference/model-configs
+
+# In this example config, we tell dbt to build all models in the example/ directory
+# as tables. These settings can be overridden in the individual model files
+# using the `{{ config(...) }}` macro.
+models:
+    taxi_rides_ny:
+        # Applies to all files under models/.../
+        staging:
+            materialized: view
+        core:
+            materialized: table
+vars:
+    payment_type_values: [1, 2, 3, 4, 5, 6]
+```
+
+See [About dbt projects](https://docs.getdbt.com/docs/build/projects) for more.
+
+
+
+
+
+
+
+
+
+
+
+
+
 
