@@ -323,6 +323,33 @@ SELECT COUNT(*) FROM `ny-rides-alexey-396910.trips_data_all.green_tripdata`;
 --- 4,523,925
 ```
 
+**IMPORTANT NOTE:**: Sometime the table created on BigQuery doesn't have same schema as parquet on Google Bucket , so you need to re-create a copy table, with edited schema. For example, use this sql script
+
+```SQL
+CREATE TABLE `ny-rides-alexey-396910.trips_data_all.yellow_tripdata_copy` AS
+SELECT
+  VendorID,
+  TIMESTAMP_SECONDS(CAST(tpep_pickup_datetime/1000000000 AS INT64)) AS tpep_pickup_datetime,
+  TIMESTAMP_SECONDS(CAST(tpep_dropoff_datetime/1000000000 AS INT64)) AS tpep_dropoff_datetime,
+  passenger_count,
+  trip_distance,				
+  RatecodeID,
+  store_and_fwd_flag,
+  PULocationID,
+  DOLocationID,
+  payment_type,
+  fare_amount,
+  extra,
+  mta_tax,
+  tip_amount,
+  tolls_amount,
+  improvement_surcharge,
+  total_amount,
+  congestion_surcharge
+FROM
+  `ny-rides-alexey-396910.trips_data_all.yellow_tripdata`;
+```
+
 ### Setting up dbt with BigQuery (Alternative A)
 
 On September 8, 2023, I created a free dbt account with BigQuery. Then I followed the instructions in this file
@@ -541,16 +568,781 @@ vars:
 
 See [About dbt projects](https://docs.getdbt.com/docs/build/projects) for more.
 
+## With the CLI
+
+### Using BigQuery + dbt cloud (Alternative A)
+
+On Google Cloud, under BigQuery section, we should have these datasets. Under `trips_data_all`, we should see
+`green_tripdata` and `yellow_tripdata`.
+
+![p89](images/bq-tables-created.png)
+
+On DBT UI, our working respo is `week_4_taxi-rides-ny`, and we also need to click on **Initialize your project** button. All of necessary folders are created.
+
+![p95](images/dbt-working-respo.png)
+
+To be able to modify the files, you must first create a new branch and switch to it.
+
+We should change `dbt_project.yml` file like this.
+
+**File `dbt_project.yml`**
+
+``` yaml
+name: 'taxi_rides_ny'
+version: '1.0.0'
+config-version: 2
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'pg-dbt-workshop'  # Using Postgres + dbt core (locally) (Alternative B)
+profile: 'default'          # Using BigQuery + dbt cloud (Alternative A)
+
+# These configuration specify where dbt should look for different types of files.
+# The `source-paths` config, for example, states that models in this project can be
+# found in the "models/" directory. You probably win't need to change these!
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"  # directory which will store compiled SQL files
+clean-targets:         # directories to be removed by `dbt clean`
+    - "target"
+    - "dbt_packages"
+
+# Configuring models
+# Full decumentation: https://docs.getdbt.com/reference/model-configs
+
+# In this example config, we tell dbt to build all models in the example/ directory
+# as tables. These settings can be overridden in the individual model files
+# using the `{{ config(...) }}` macro.
+models:
+    taxi_rides_ny:
+        # Applies to all files under models/.../
+        staging:
+            materialized: view
+        core:
+            materialized: table
+vars:
+    payment_type_values: [1, 2, 3, 4, 5, 6]
+```
+
+- Name of the project: `taxi_rides_ny`.
+- Name of the model: `taxi_rides_ny`.
+
+## Build the first dbt models
+
+### Anatomy of a dbt model
+
+**Anatomy of a dbt model**
+
+![p96](images/dbt-anatomy.png)
+
+In dbt, you can combine SQL with [Jinja](https://jinja.palletsprojects.com/), a templating language.
+
+Using Jinja turns our dbt project into a programming environment for SQL, giving you the ability to do things that
+aren’t normally possible in SQL (ie. evaluate an expression, variable or function call or print the result into the
+template).
+
+See [Jinja and macros](https://docs.getdbt.com/docs/build/jinja-macros) for more.
+
+Materializations are strategies for persisting dbt models in a warehouse. There are four types of materializations built
+into dbt. They are:
+
+- table (most common)
+- view (most common)
+- incremental (useful for data that doesn’t really change every day)
+- ephemeral ()
+
+By default, dbt models are materialized as "views". Models can be configured with a different materialization by
+supplying the `materialized` configuration parameter.
+
+Materializations can be configured by default in `dbt-project.yml` or directly inside of the model `sql` files.
+
+``` sql
+{{ config(materialized='table') }}
+
+select *
+from ...
+```
+
+See [Materializations](https://docs.getdbt.com/docs/build/materializations) for more.
+
+### The FROM clause of a dbt model
+
+#### Sources
+
+Sources make it possible to name and describe the data loaded into your warehouse by your Extract and Load tools.
+
+- The data loaded to our dwh that we use as sources for our models
+- Configuration defined in the yml files in the models folder
+- Used with the source macro that will resolve the name to the right schema, plus build the dependencies automatically
+- Source freshness can be defined and tested
+
+See [Sources](https://docs.getdbt.com/docs/build/sources) for more.
+
+**Example from file `models/staging/schema.yml`**
+
+``` yaml
+sources:
+    - name: staging
+      database: ny-rides-alexey-396910  # For bigquery
+      schema: trips_data_all
+
+      # loaded_at_field: record_loaded_at
+      tables:
+        - name: green_tripdata
+        - name: yellow_tripdata
+          freshness:
+            error_after: {count: 6, period: hour}
+```
+Explanation of the DBT configuration in models/staging/schema.yml:
+
+1. `sources`: This keyword signifies the start of the data source definition block.
+
+2. "name: staging": The name of the source is specified as "staging".
+
+3. "database: ny-rides-alexey-396910": This refers to the name of the database where the source data is stored. In this case, the data resides in a BigQuery project named "ny-rides-alexey-396910".
+
+4. "schema: trips_data_all": This indicates the schema (or dataset in BigQuery's terminology) which houses the tables pertaining to this source.
+
+5. "tables": Lists the tables that are part of the "staging" source. 
+   - "name: green_tripdata": Defines a table in the source named "green_tripdata".
+   - "name: yellow_tripdata": Specifies another table called "yellow_tripdata" within the source.
+
+6. "freshness": This section relates to the "freshness" test for the data.
+   - "error_after: {count: 6, period: hour}": This line sets a freshness constraint for the "yellow_tripdata" table. If the data in this table hasn't been updated in the last 6 hours, DBT will generate an error when executing the freshness test (`dbt source freshness`).
+
+In summary, this configuration sets up a data source named "staging" from the BigQuery database "ny-rides-alexey-396910" and schema "trips_data_all". Within this source, two tables, "green_tripdata" and "yellow_tripdata", are identified. A freshness test is established for the "yellow_tripdata" table, requiring updates at least every 6 hours. Otherwise, DBT will flag this as an error during testing.
 
 
 
+The code below keeps only the first row of duplicates with the condition `where rn = 1`. See [4 Ways to Check for
+Duplicate Rows in SQL Server](https://database.guide/4-ways-to-check-for-duplicate-rows-in-sql-server/).
+
+**Example from file `models/staging/stg_green_tripdata.sql`**
+
+``` sql
+with tripdata as
+(
+  select *,
+    row_number() over(partition by vendorid, lpep_pickup_datetime) as rn
+  from {{ source('staging','green_tripdata') }}
+  where vendorid is not null
+)
+```
+
+#### Seeds
+
+Seeds are CSV files in your dbt project (typically in your `seeds` directory), that dbt can load into your data
+warehouse using the `dbt seed` command.
+
+- CSV files stored in our repository under the seed folder
+- Benefits of version controlling
+- Equivalent to a copy command
+- Recommended for data that doesn’t change frequently
+- Runs with `dbt seed -s file_name`
+
+See [Seeds](https://docs.getdbt.com/docs/build/seeds) for more.
+
+**Example `taxi_zone_loopup.csv`**
+
+``` csv
+"locationid","borough","zone","service_name"
+...
+```
+
+**Example `models/core/dim_zones.sql`**
+
+``` sql
+select
+    locationid,
+    borough,
+    zone,
+    replace(service_zone,'Boro','Green') as service_zone
+from {{ ref('taxi_zone_lookup') }}
+```
+
+#### Ref
+
+The most important function in dbt is `ref()`; it’s impossible to build even moderately complex models without it.
+`ref()` is how you reference one model within another. This is a very common behavior, as typically models are built to
+be "stacked" on top of one another.
+
+- Macro to reference the underlying tables and views that were building the data warehouse
+- Run the same code in any environment, it will resolve the correct schema for you
+- Dependencies are built automatically
+
+See [ref](https://docs.getdbt.com/reference/dbt-jinja-functions/ref) for more.
+
+**dbt model (`models/core/fact_trips.sql`)**
+
+``` sql
+with green_data as (
+    select *,
+        'Green' as service_type
+    from {{ ref('stg_green_tripdata') }}
+)
+```
+
+This model will be translated in compiled code.
+
+**Compiled code**
+
+``` sql
+with green_data as (
+    select *,
+        'Green' as service_type
+    from "production"."dbt_aboisvert"."stg_green_tripdata"
+),
+```
+
+### Create our first dbt model
+
+Create these folders and files under the dbt project `taxi_rides_ny` :
+
+- `models/core`
+- `models/staging`
+  - `schema.yml`
+  - `stg_green_tripdata.sql`
+
+**File `models/staging/schema.yml`**
+
+``` yaml
+version: 2
+
+sources:
+    - name: staging
+      # database: taxi-rides-ny-339813
+      database: hopeful-summer-375416
+      schema: trips_data_all
+
+      tables:
+        - name: green_tripdata
+        - name: yellow_tripdata
+```
+
+**File `models/staging/stg_green_tripdata.sql`**
+
+``` txt
+{{ config(materialized="view") }}
+
+select * from {{ source('staging', 'green_tripdata') }}
+limit 100
+```
+![p97](images/dbt-first-model.png)
+
+Now, we can run this model with one of these following commands:
+
+``` bash
+dbt run  # Builds models in your target database.
+dbt run --select stg_green_tripdata  # Builds a specific model.
+dbt run --select stg_green_tripdata+  # Builds a specific model and its children.
+dbt run --select +stg_green_tripdata  # Builds a specific model and its ancestors.
+dbt run --select +stg_green_tripdata+  # Builds a specific model and its children and ancestors.
+```
+
+This is what appears in dbt Cloud after running the command `dbt run`.
+
+![p98](images/dbt-first-model-run.png)
+
+Then we modify the query `models/staging/stg_green_tripdata.sql` by indicating the columns.
+
+**File `models/staging/stg_green_tripdata.sql`**
+
+``` txt
+{{ config(materialized="view") }}
+
+select
+    -- identifiers
+    cast(vendorid as integer) as vendorid,
+    cast(ratecodeid as integer) as ratecodeid,
+    cast(pulocationid as integer) as  pickup_locationid,
+    cast(dolocationid as integer) as dropoff_locationid,
+
+    -- timestamps
+    cast(lpep_pickup_datetime as timestamp) as pickup_datetime,
+    cast(lpep_dropoff_datetime as timestamp) as dropoff_datetime,
+
+    -- trip info
+    store_and_fwd_flag,
+    cast(passenger_count as integer) as passenger_count,
+    cast(trip_distance as numeric) as trip_distance,
+    cast(trip_type as integer) as trip_type,
+
+    -- payment info
+    cast(fare_amount as numeric) as fare_amount,
+    cast(extra as numeric) as extra,
+    cast(mta_tax as numeric) as mta_tax,
+    cast(tip_amount as numeric) as tip_amount,
+    cast(tolls_amount as numeric) as tolls_amount,
+    cast(ehail_fee as numeric) as ehail_fee,
+    cast(improvement_surcharge as numeric) as improvement_surcharge,
+    cast(total_amount as numeric) as total_amount,
+    cast(payment_type as integer) as payment_type,
+    cast(congestion_surcharge as numeric) as congestion_surcharge
+
+from {{ source('staging', 'green_tripdata') }}
+limit 100
+```
+
+Then we go to BigQuery and we see that the view `stg_green_tripdata` is created.
+
+![p99](images/bq-stg_green.png)
+
+### Macros
+
+[Macros](https://docs.getdbt.com/docs/build/jinja-macros#macros) in Jinja are pieces of code that can be reused multiple
+times – they are analogous to "functions" in other programming languages, and are extremely useful if you find yourself
+repeating code across multiple models. Macros are defined in `.sql` files, typically in your `macros` directory
+([docs](https://docs.getdbt.com/reference/project-configs/macro-paths)).
+
+- Use control structures (e.g. if statements and for loops) in SQL
+- Use environment variables in your dbt project for production deployments
+- Operate on the results of one query to generate another query
+- Abstract snippets of SQL into reusable macros — these are analogous to functions in most programming languages.
+
+Create these folders and files under `taxi_rides_ny`:
+
+- `macros`
+  - `get_payment_type_description.sql`
+
+**Definition of the macro (`macros/get_payment_type_description.sql`)**
+
+``` sql
+{#
+    This macro returns the description of the payment_type
+#}
+
+{% macro get_payment_type_description(payment_type) -%}
+
+    case {{ payment_type }}
+        when 1 then 'Credit card'
+        when 2 then 'Cash'
+        when 3 then 'No charge'
+        when 4 then 'Dispute'
+        when 5 then 'Unknown'
+        when 6 then 'Voided trip'
+    end
+
+{%- endmacro %}
+```
+
+**Usage of the macro (`models/staging/stg_green_tripdata.sql`)**
+
+``` sql
+{{ config(materialized="view") }}
+
+select
+    -- identifiers
+    cast(vendorid as integer) as vendorid,
+    cast(ratecodeid as integer) as ratecodeid,
+    cast(pulocationid as integer) as  pickup_locationid,
+    cast(dolocationid as integer) as dropoff_locationid,
+
+    -- timestamps
+    cast(lpep_pickup_datetime as timestamp) as pickup_datetime,
+    cast(lpep_dropoff_datetime as timestamp) as dropoff_datetime,
+
+    -- trip info
+    store_and_fwd_flag,
+    cast(passenger_count as integer) as passenger_count,
+    cast(trip_distance as numeric) as trip_distance,
+    cast(trip_type as integer) as trip_type,
+
+    -- payment info
+    cast(fare_amount as numeric) as fare_amount,
+    cast(extra as numeric) as extra,
+    cast(mta_tax as numeric) as mta_tax,
+    cast(tip_amount as numeric) as tip_amount,
+    cast(tolls_amount as numeric) as tolls_amount,
+    cast(ehail_fee as numeric) as ehail_fee,
+    cast(improvement_surcharge as numeric) as improvement_surcharge,
+    cast(total_amount as numeric) as total_amount,
+    cast(payment_type as integer) as payment_type,
+    cast(congestion_surcharge as numeric) as congestion_surcharge,
+
+    -- payment type description
+    {{ get_payment_type_description('payment_type') }} as payment_type_description
+
+from {{ source('staging', 'green_tripdata') }}
+limit 100
+```
+
+Then run the command on dbt terminal
+
+``` bash
+dbt run --select stg_green_tripdata
+```
+
+After that, check your table on Big Query, you will see new column added
+
+![p100](images/bg-new-column.png)
+
+### Packages
+
+dbt *packages* are in fact standalone dbt projects, with models and macros that tackle a specific problem area. As a dbt
+user, by adding a package to your project, the package’s models and macros will become part of your own project
+
+- Like libraries in other programming languages
+- Standalone dbt projects, with models and macros that tackle a specific problem area.
+- By adding a package to your project, the package’s models and macros will become part of your own project.
+- Imported in the `packages.yml` file and imported by running `dbt deps`
+- A list of useful packages can be find in [dbt package hub](https://hub.getdbt.com/).
+
+See [Packages](https://docs.getdbt.com/docs/build/packages) for more.
+
+**Specifications of the packages to import in the project (`packages.yml`)**
+
+``` yaml
+packages:
+  - package: dbt-labs/dbt_utils
+    version: 0.8.0
+```
+
+We should see this logs and a lot of folders and files created under `dbt_packages/dbt_utils`.
+
+<table>
+<tr><td>
+<img src="images/dbt-install-packages1.png">
+</td><td>
+<img src="images/dbt-install-packages2.png">
+</td></tr>
+</table>
+
+Let’s go back to the model.
+
+**Usage of a macro from a package (`models/staging/stg_green_tripdata.sql`).**
+
+**Usage of the packages (`models/staging/stg_green_tripdata.sql`)**
+
+``` sql
+{{ config(materialized="view") }}
+
+select
+    -- identifiers
+    {{ dbt_utils.generate_surrogate_key(['vendorid', 'lpep_pickup_datetime']) }} as tripid,
+    cast(vendorid as integer) as vendorid,
+    cast(ratecodeid as integer) as ratecodeid,
+    cast(pulocationid as integer) as  pickup_locationid,
+    cast(dolocationid as integer) as dropoff_locationid,
+
+    -- timestamps
+    cast(lpep_pickup_datetime as timestamp) as pickup_datetime,
+    cast(lpep_dropoff_datetime as timestamp) as dropoff_datetime,
+
+    -- trip info
+    store_and_fwd_flag,
+    cast(passenger_count as integer) as passenger_count,
+    cast(trip_distance as numeric) as trip_distance,
+    cast(trip_type as integer) as trip_type,
+
+    -- payment info
+    cast(fare_amount as numeric) as fare_amount,
+    cast(extra as numeric) as extra,
+    cast(mta_tax as numeric) as mta_tax,
+    cast(tip_amount as numeric) as tip_amount,
+    cast(tolls_amount as numeric) as tolls_amount,
+    cast(ehail_fee as numeric) as ehail_fee,
+    cast(improvement_surcharge as numeric) as improvement_surcharge,
+    cast(total_amount as numeric) as total_amount,
+    cast(payment_type as integer) as payment_type,
+    cast(congestion_surcharge as numeric) as congestion_surcharge,
+
+    -- payment type description
+    {{ get_payment_type_description('payment_type') }} as payment_type_description
+
+from {{ source('staging', 'green_tripdata') }}
+limit 100
+```
+
+`generate_surrogate_key` is a macro within the `dbt_utils` package that helps create a unique surrogate key based on one or more fields in a record. This macro employs a hashing algorithm to produce a unique value for each record based on the provided fields. This unique key is typically used in fact and dimension tables in a data warehouse architecture.
+
+Here the compiled code.
+
+**File `target/compiled/taxi_rides_ny/models/staging/stg_green_tripdata.sql`.**
+
+``` sql
+select
+    -- identifiers
+    to_hex(md5(cast(coalesce(cast(vendorid as
+    string
+), '') || '-' || coalesce(cast(lpep_pickup_datetime as
+    string
+), '') as
+    string
+))) as tripid,
+    cast(vendorid as integer) as vendorid,
+    cast(ratecodeid as integer) as ratecodeid,
+...
+```
+
+Now, let’s run this with this command.
+
+``` bash
+dbt run --select stg_green_tripdata
+```
+
+After that, check on  Big Query, you will see a new column created
+
+![p101](images/dbt-apply-packages.png)
+
+### Variables
+
+dbt provides a mechanism, [variables](https://docs.getdbt.com/reference/dbt-jinja-functions/var), to provide data to
+models for compilation. Variables can be used to [configure
+timezones](https://github.com/dbt-labs/snowplow/blob/0.3.9/dbt_project.yml#L22), [avoid hardcoding table
+names](https://github.com/dbt-labs/quickbooks/blob/v0.1.0/dbt_project.yml#L23) or otherwise provide data to models to
+configure how they are compiled.
+
+- Variables are useful for defining values that should be used across the project
+- With a macro, dbt allows us to provide data to models for compilation
+- To use a variable we use the `{{ var('…​') }}` function
+- Variables can defined in two ways:
+  - In the `dbt_project.yml` file
+  - On the command line
+
+See [Project variables](https://docs.getdbt.com/docs/build/project-variables) for more.
+
+**Global variable we define under `dbt_project.yml`.**
+
+``` yaml
+vars:
+  payment_type_values: [1, 2, 3, 4, 5, 6]
+```
+
+**Variable whose value we can change via CLI (`models/staging/stg_green_tripdata.sql`).**
+
+``` sql
+from {{ source('staging', 'green_tripdata') }}
+where vendorid is not null
+
+-- dbt build --m <model.sql> --var 'is_test_run: false'
+{% if var('is_test_run', default=true) %}
+
+  limit 100
+
+{% endif %}
+```
+
+Then, we can run the model.
+
+``` bash
+dbt build --model stg_green_tripdata --vars 'is_test_run: false'
+```
+
+We make the same changes for `models/staging/stg_yellow_tripdata.sql`.
+
+**File `models/staging/stg_yellow_tripdata.sql`**
+
+``` sql
+{{ config(materialized='view') }}
+
+select
+   -- identifiers
+    {{ dbt_utils.generate_surrogate_key(['vendorid', 'tpep_pickup_datetime']) }} as tripid,
+    cast(vendorid as integer) as vendorid,
+    cast(ratecodeid as integer) as ratecodeid,
+    cast(pulocationid as integer) as  pickup_locationid,
+    cast(dolocationid as integer) as dropoff_locationid,
+
+    -- timestamps
+    cast(tpep_pickup_datetime as timestamp) as pickup_datetime,
+    cast(tpep_dropoff_datetime as timestamp) as dropoff_datetime,
+
+    -- trip info
+    store_and_fwd_flag,
+    cast(passenger_count as integer) as passenger_count,
+    cast(trip_distance as numeric) as trip_distance,
+    -- yellow cabs are always street-hail
+    1 as trip_type,
+
+    -- payment info
+    cast(fare_amount as numeric) as fare_amount,
+    cast(extra as numeric) as extra,
+    cast(mta_tax as numeric) as mta_tax,
+    cast(tip_amount as numeric) as tip_amount,
+    cast(tolls_amount as numeric) as tolls_amount,
+    cast(0 as numeric) as ehail_fee,
+    cast(improvement_surcharge as numeric) as improvement_surcharge,
+    cast(total_amount as numeric) as total_amount,
+    cast(payment_type as integer) as payment_type,
+    cast(congestion_surcharge as numeric) as congestion_surcharge,
+    {{ get_payment_type_description('payment_type') }} as payment_type_description,
+
+from {{ source('staging', 'yellow_tripdata') }}
+where vendorid is not null
+
+-- dbt build --m <model.sql> --var 'is_test_run: false'
+{% if var('is_test_run', default=true) %}
+
+  limit 100
+
+{% endif %}
+
+```
+Now use `dbt run` because we have two models…​
+
+``` bash
+dbt run --vars 'is_test_run: false'
+```
+
+We should see this log and `stg_yellow_tripdata` created in BigQuery (we need to refresh the page).
+
+![p102](images/bq-stg_yellow.png)
+
+### Seeds
+
+The dbt [seed](https://docs.getdbt.com/reference/commands/seed) command will load `csv` files located in the seed-paths
+directory of your dbt project into your data warehouse.
+
+In our dbt cloud, create `seeds` folder, create the file `seeds/taxi_zone_lookup.csv` and paste in it the content of
+that [csv file](https://raw.githubusercontent.com/DataTalksClub/data-engineering-zoomcamp/main/week_4_analytics_engineering/taxi_rides_ny/data/taxi_zone_lookup.csv).
+
+After, run the command `dbt seed` to create table `taxi_zone_lookup` in BigQuery. We should have 265 lines.
+
+We need to specify the data types of the csv file in `dbt_project.yml`.
+
+**File `dbt_project.yml`**
+
+``` yaml
+seeds:
+    taxi_rides_ny:
+        taxi_zone_lookup:
+            +column_types:
+                locationid: numeric
+```
+
+If we slightly modify data (for example, change `1,"EWR","Newark Airport","EWR"` for `1,"NEWR","Newark Airport","EWR"`)
+in the csv file, we can run the following command:
+
+``` bash
+dbt seed --full-refresh
+```
+
+We can see the change in the BigQuery table `taxi_zone_loopup`.
+
+![p103](images/bq-tables-zone.png)
+
+Then, create the file `models/core/dim_zones.sql`.
+
+**File `models/core/dim_zones.sql`**
+
+``` sql
+{{ config(materialized='table') }}
 
 
+select
+    locationid,
+    borough,
+    zone,
+    replace(service_zone,'Boro','Green') as service_zone
+from {{ ref('taxi_zone_lookup') }}
+```
 
+Ideally, we want everything in the directory to be tables to have efficient queries.
 
+![p104](images/dbt-dim-zones.png)
 
+Now, create the model `models/core/fact_trips.sql`.
 
+**File `models/core/fact_trips.sql`**
 
+``` sql
+{{ config(materialized='table') }}
 
+with green_data as (
+    select *,
+        'Green' as service_type
+    from {{ ref('stg_green_tripdata') }}
+),
 
+yellow_data as (
+    select *,
+        'Yellow' as service_type
+    from {{ ref('stg_yellow_tripdata') }}
+),
+
+trips_unioned as (
+    select * from green_data
+    union all
+    select * from yellow_data
+),
+
+dim_zones as (
+    select * from {{ ref('dim_zones') }}
+    where borough != 'Unknown'
+)
+select
+    trips_unioned.tripid,
+    trips_unioned.vendorid,
+    trips_unioned.service_type,
+    trips_unioned.ratecodeid,
+    trips_unioned.pickup_locationid,
+    pickup_zone.borough as pickup_borough,
+    pickup_zone.zone as pickup_zone,
+    trips_unioned.dropoff_locationid,
+    dropoff_zone.borough as dropoff_borough,
+    dropoff_zone.zone as dropoff_zone,
+    trips_unioned.pickup_datetime,
+    trips_unioned.dropoff_datetime,
+    trips_unioned.store_and_fwd_flag,
+    trips_unioned.passenger_count,
+    trips_unioned.trip_distance,
+    trips_unioned.trip_type,
+    trips_unioned.fare_amount,
+    trips_unioned.extra,
+    trips_unioned.mta_tax,
+    trips_unioned.tip_amount,
+    trips_unioned.tolls_amount,
+    trips_unioned.ehail_fee,
+    trips_unioned.improvement_surcharge,
+    trips_unioned.total_amount,
+    trips_unioned.payment_type,
+    trips_unioned.payment_type_description,
+    trips_unioned.congestion_surcharge
+from trips_unioned
+inner join dim_zones as pickup_zone
+on trips_unioned.pickup_locationid = pickup_zone.locationid
+inner join dim_zones as dropoff_zone
+on trips_unioned.dropoff_locationid = dropoff_zone.locationid
+```
+
+We have this.
+
+![p105](images/dbt-fact-trips.png)
+
+The `dbt run` command will create everything, except the seeds. we also want to run the seeds, we will use `dbt build`
+
+<table>
+<tr><td>
+<img src="images/dbt-run.png">
+</td><td>
+<img src="images/dbt-build.png">
+</td></tr>
+</table>
+
+The command `dbt build --select fast_trips` will only run the model `fact_trips`.
+
+The command `dbt build --select +fast_trips` will run everything that `fact_trips` need. dbt already konws the
+dependencies.
+
+## Testing and documenting dbt models
+
+### Tests
+
+Tests are assertions you make about your models and other resources in your dbt project (e.g. sources, seeds and
+snapshots). When you run dbt test, dbt will tell you if each test in your project passes or fails.
+
+- Assumptions that we make about our data
+- Tests in dbt are essentially a `select` sql query
+- These assumptions get compiled to sql that returns the amount of failing records
+- Test are defined on a column in the .yml file
+- dbt provides basic tests to check if the column values are:
+  - Unique
+  - Not null
+  - Accepted values
+  - A foreign key to another table
+- You can create your custom tests as queries
 

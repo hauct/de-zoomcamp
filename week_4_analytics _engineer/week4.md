@@ -841,7 +841,7 @@ sources:
 
 select * from {{ source('staging', 'green_tripdata') }}
 limit 100
-```
+``` 
 
 ![w4s13](dtc/w4s13.png)
 
@@ -1080,7 +1080,7 @@ See [Packages](https://docs.getdbt.com/docs/build/packages) for more.
 ``` yaml
 packages:
   - package: dbt-labs/dbt_utils
-    version: 0.8.0
+    version: 1.1.1
 ```
 
 To install this package, run this command:
