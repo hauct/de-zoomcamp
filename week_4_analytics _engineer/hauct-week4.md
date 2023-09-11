@@ -1346,3 +1346,531 @@ snapshots). When you run dbt test, dbt will tell you if each test in your projec
   - A foreign key to another table
 - You can create your custom tests as queries
 
+See [Tests](https://docs.getdbt.com/docs/build/tests) for more.
+
+**Definition of basic tests in the .yml files (`models/staging/schema.yml`)**
+
+``` yaml
+sources:
+    - name: staging
+      database: ny-rides-alexey-396910  # For bigquery
+      schema: trips_data_all
+
+      # loaded_at_field: record_loaded_at
+      tables:
+        - name: green_tripdata
+        - name: yellow_tripdata
+
+models:
+    - name: stg_green_tripdata
+      description: >
+        Trip made by green taxis, also known as boro taxis and street-hail liveries.
+        Green taxis may respond to street hails,but only in the areas indicated in green on the
+        map (i.e. above W 110 St/E 96th St in Manhattan and in the boroughs).
+        The records were collected and provided to the NYC Taxi and Limousine Commission (TLC) by
+        technology service providers. 
+      columns:
+          - name: tripid
+            description: Primary key for this table, generated with a concatenation of vendorid+pickup_datetime
+            tests:
+                - unique:
+                    severity: warn
+                - not_null:
+                    severity: warn
+          - name: VendorID 
+            description: > 
+                A code indicating the TPEP provider that provided the record.
+                1= Creative Mobile Technologies, LLC; 
+                2= VeriFone Inc.
+          - name: pickup_datetime 
+            description: The date and time when the meter was engaged.
+          - name: dropoff_datetime 
+            description: The date and time when the meter was disengaged.
+          - name: Passenger_count 
+            description: The number of passengers in the vehicle. This is a driver-entered value.
+          - name: Trip_distance 
+            description: The elapsed trip distance in miles reported by the taximeter.
+          - name: Pickup_locationid
+            description: locationid where the meter was engaged.
+            tests:
+              - relationships:
+                  to: ref('taxi_zone_lookup')
+                  field: locationid
+                  severity: warn
+          - name: dropoff_locationid 
+            description: locationid where the meter was engaged.
+            tests:
+              - relationships:
+                  to: ref('taxi_zone_lookup')
+                  field: locationid
+          - name: RateCodeID 
+            description: >
+                The final rate code in effect at the end of the trip.
+                  1= Standard rate
+                  2=JFK
+                  3=Newark
+                  4=Nassau or Westchester
+                  5=Negotiated fare
+                  6=Group ride
+          - name: Store_and_fwd_flag 
+            description: > 
+              This flag indicates whether the trip record was held in vehicle
+              memory before sending to the vendor, aka “store and forward,”
+              because the vehicle did not have a connection to the server.
+                Y= store and forward trip
+                N= not a store and forward trip
+          - name: Dropoff_longitude 
+            description: Longitude where the meter was disengaged.
+          - name: Dropoff_latitude 
+            description: Latitude where the meter was disengaged.
+          - name: Payment_type 
+            description: >
+              A numeric code signifying how the passenger paid for the trip.
+            tests: 
+              - accepted_values:
+                  values: "{{ var('payment_type_values') }}"
+                  severity: warn
+                  quote: false
+          - name: payment_type_description
+            description: Description of the payment_type code
+          - name: Fare_amount 
+            description: > 
+              The time-and-distance fare calculated by the meter.
+              Extra Miscellaneous extras and surcharges. Currently, this only includes
+              the $0.50 and $1 rush hour and overnight charges.
+              MTA_tax $0.50 MTA tax that is automatically triggered based on the metered
+              rate in use.
+          - name: Improvement_surcharge 
+            description: > 
+              $0.30 improvement surcharge assessed trips at the flag drop. The
+              improvement surcharge began being levied in 2015.
+          - name: Tip_amount 
+            description: > 
+              Tip amount. This field is automatically populated for credit card
+              tips. Cash tips are not included.
+          - name: Tolls_amount 
+            description: Total amount of all tolls paid in trip.
+          - name: Total_amount 
+            description: The total amount charged to passengers. Does not include cash tips.
+
+    - name: stg_yellow_tripdata
+      description: > 
+        Trips made by New York City's iconic yellow taxis. 
+        Yellow taxis are the only vehicles permitted to respond to a street hail from a passenger in all five
+        boroughs. They may also be hailed using an e-hail app like Curb or Arro.
+        The records were collected and provided to the NYC Taxi and Limousine Commission (TLC) by
+        technology service providers. 
+      columns:
+          - name: tripid
+            description: Primary key for this table, generated with a concatenation of vendorid+pickup_datetime
+            tests:
+                - unique:
+                    severity: warn
+                - not_null:
+                    severity: warn
+          - name: VendorID 
+            description: > 
+                A code indicating the TPEP provider that provided the record.
+                1= Creative Mobile Technologies, LLC; 
+                2= VeriFone Inc.
+          - name: pickup_datetime 
+            description: The date and time when the meter was engaged.
+          - name: dropoff_datetime 
+            description: The date and time when the meter was disengaged.
+          - name: Passenger_count 
+            description: The number of passengers in the vehicle. This is a driver-entered value.
+          - name: Trip_distance 
+            description: The elapsed trip distance in miles reported by the taximeter.
+          - name: Pickup_locationid
+            description: locationid where the meter was engaged.
+            tests:
+              - relationships:
+                  to: ref('taxi_zone_lookup')
+                  field: locationid
+                  severity: warn
+          - name: dropoff_locationid 
+            description: locationid where the meter was engaged.
+            tests:
+              - relationships:
+                  to: ref('taxi_zone_lookup')
+                  field: locationid
+                  severity: warn
+          - name: RateCodeID 
+            description: >
+                The final rate code in effect at the end of the trip.
+                  1= Standard rate
+                  2=JFK
+                  3=Newark
+                  4=Nassau or Westchester
+                  5=Negotiated fare
+                  6=Group ride
+          - name: Store_and_fwd_flag 
+            description: > 
+              This flag indicates whether the trip record was held in vehicle
+              memory before sending to the vendor, aka “store and forward,”
+              because the vehicle did not have a connection to the server.
+                Y= store and forward trip
+                N= not a store and forward trip
+          - name: Dropoff_longitude 
+            description: Longitude where the meter was disengaged.
+          - name: Dropoff_latitude 
+            description: Latitude where the meter was disengaged.
+          - name: Payment_type 
+            description: >
+              A numeric code signifying how the passenger paid for the trip.
+            tests: 
+              - accepted_values:
+                  values: "{{ var('payment_type_values') }}"
+                  severity: warn
+                  quote: false
+          - name: payment_type_description
+            description: Description of the payment_type code
+          - name: Fare_amount 
+            description: > 
+              The time-and-distance fare calculated by the meter.
+              Extra Miscellaneous extras and surcharges. Currently, this only includes
+              the $0.50 and $1 rush hour and overnight charges.
+              MTA_tax $0.50 MTA tax that is automatically triggered based on the metered
+              rate in use.
+          - name: Improvement_surcharge 
+            description: > 
+              $0.30 improvement surcharge assessed trips at the flag drop. The
+              improvement surcharge began being levied in 2015.
+          - name: Tip_amount 
+            description: > 
+              Tip amount. This field is automatically populated for credit card
+              tips. Cash tips are not included.
+          - name: Tolls_amount 
+            description: Total amount of all tolls paid in trip.
+          - name: Total_amount 
+            description: The total amount charged to passengers. Does not include cash tips.
+```
+
+**Warnings in the CLI from running `dbt test`.**
+
+![p106](images/dbt-warning-test.png)
+
+### Documentation
+
+- dbt provides a way to generate documentation for your dbt project and render it as a website.
+- The documentation for your project includes:
+  - **Information about your project**:
+    - Model code (both from the `.sql` file and compiled)
+    - Model dependencies
+    - Sources
+    - Auto generated DAG from the ref and source macros
+    - Descriptions (from `.yml` file) and tests
+  - **Information about your data warehouse (information_schema)**:
+    - Column names and data types
+    - Table stats like size and rows
+
+- `dbt docs` can also be hosted in dbt cloud
+
+See [About documentation](https://docs.getdbt.com/docs/collaborate/documentation) for more.
+
+**Example from `models/core/schema.yml`**
+
+``` yaml
+version: 2
+
+models:
+  - name: dim_zones
+    description: >
+      List of unique zones idefied by locationid.
+      Includes the service zone they correspond to (Green or yellow).
+  - name: fact_trips
+    description: >
+      Taxi trips corresponding to both service zones (Green and yellow).
+      The table contains records where both pickup and dropoff locations are valid and known zones.
+      Each record corresponds to a trip uniquely identified by tripid.
+
+  - name: dm_monthly_zone_revenue
+    description: >
+      Aggregated table of all taxi trips corresponding to both service zones (Green and yellow) per pickup zone, month and service.
+      The table contains monthly sums of the fare elements used to calculate the monthly revenue.
+      The table contains also monthly indicators like number of trips, and average trip distance.
+    columns:
+      - name: revenue_monthly_total_amount
+        description: Monthly sum of the the total_amount of the fare charged for the trip per pickup zone, month and service.
+        tests:
+            - not_null:
+                severity: error
+```
+
+## Deploying a dbt project
+
+We define a model in this file `models/core/dm_monthly_zone_revenue.sql`.
+
+**File `models/core/dm_monthly_zone_revenue.sql`**
+
+``` sql
+{{ config(materialized='table') }}
+
+with trips_data as (
+    select * from {{ ref('fact_trips') }}
+)
+    select
+    -- Reveneue grouping
+    pickup_zone as revenue_zone,
+    -- date_trunc('month', pickup_datetime) as revenue_month,
+    -- Note: For BQ use instead: date_trunc(pickup_datetime, month) as revenue_month,
+    date_trunc(pickup_datetime, month) as revenue_month,
+
+    service_type,
+
+    -- Revenue calculation
+    sum(fare_amount) as revenue_monthly_fare,
+    sum(extra) as revenue_monthly_extra,
+    sum(mta_tax) as revenue_monthly_mta_tax,
+    sum(tip_amount) as revenue_monthly_tip_amount,
+    sum(tolls_amount) as revenue_monthly_tolls_amount,
+    sum(ehail_fee) as revenue_monthly_ehail_fee,
+    sum(improvement_surcharge) as revenue_monthly_improvement_surcharge,
+    sum(total_amount) as revenue_monthly_total_amount,
+    sum(congestion_surcharge) as revenue_monthly_congestion_surcharge,
+
+    -- Additional calculations
+    count(tripid) as total_monthly_trips,
+    avg(passenger_count) as avg_montly_passenger_count,
+    avg(trip_distance) as avg_montly_trip_distance
+
+    from trips_data
+    group by 1,2,3
+```
+
+Then, we add another section to define the model inside `models/staging/schema.yml`. This section is used in particular
+to document the model and to add tests.
+
+**File `models/staging/schema.yml`**
+
+``` yaml
+models:
+    - name: stg_green_tripdata
+      description: >
+        Trip made by green taxis, also known as boro taxis and street-hail liveries.
+        Green taxis may respond to street hails,but only in the areas indicated in green on the
+        map (i.e. above W 110 St/E 96th St in Manhattan and in the boroughs).
+        The records were collected and provided to the NYC Taxi and Limousine Commission (TLC) by
+        technology service providers.
+      columns:
+          - name: tripid
+            description: Primary key for this table, generated with a concatenation of vendorid+pickup_datetime
+            tests:
+                - unique:
+                    severity: warn
+                - not_null:
+                    severity: warn
+          - name: VendorID
+            description: >
+                A code indicating the TPEP provider that provided the record.
+                1= Creative Mobile Technologies, LLC;
+                2= VeriFone Inc.
+          - name: pickup_datetime
+            description: The date and time when the meter was engaged.
+          - name: dropoff_datetime
+            description: The date and time when the meter was disengaged.
+          - name: Passenger_count
+            description: The number of passengers in the vehicle. This is a driver-entered value.
+          - name: Trip_distance
+            description: The elapsed trip distance in miles reported by the taximeter.
+          - name: Pickup_locationid
+            description: locationid where the meter was engaged.
+            tests:
+              - relationships:
+                  to: ref('taxi_zone_lookup')
+                  field: locationid
+                  severity: warn
+          - name: dropoff_locationid
+            description: locationid where the meter was engaged.
+            tests:
+              - relationships:
+                  to: ref('taxi_zone_lookup')
+                  field: locationid
+          - name: RateCodeID
+            description: >
+                The final rate code in effect at the end of the trip.
+                  1= Standard rate
+                  2=JFK
+                  3=Newark
+                  4=Nassau or Westchester
+                  5=Negotiated fare
+                  6=Group ride
+          - name: Store_and_fwd_flag
+            description: >
+              This flag indicates whether the trip record was held in vehicle
+              memory before sending to the vendor, aka “store and forward,”
+              because the vehicle did not have a connection to the server.
+                Y= store and forward trip
+                N= not a store and forward trip
+          - name: Dropoff_longitude
+            description: Longitude where the meter was disengaged.
+          - name: Dropoff_latitude
+            description: Latitude where the meter was disengaged.
+          - name: Payment_type
+            description: >
+              A numeric code signifying how the passenger paid for the trip.
+            tests:
+              - accepted_values:
+                  values: "{{ var('payment_type_values') }}"  
+                  severity: warn
+                  quote: false
+          - name: payment_type_description
+            description: Description of the payment_type code
+          - name: Fare_amount
+            description: >
+              The time-and-distance fare calculated by the meter.
+              Extra Miscellaneous extras and surcharges. Currently, this only includes
+              the $0.50 and $1 rush hour and overnight charges.
+              MTA_tax $0.50 MTA tax that is automatically triggered based on the metered
+              rate in use.
+          - name: Improvement_surcharge
+            description: >
+              $0.30 improvement surcharge assessed trips at the flag drop. The
+              improvement surcharge began being levied in 2015.
+          - name: Tip_amount
+            description: >
+              Tip amount. This field is automatically populated for credit card
+              tips. Cash tips are not included.
+          - name: Tolls_amount
+            description: Total amount of all tolls paid in trip.
+          - name: Total_amount
+            description: The total amount charged to passengers. Does not include cash tips.
+```
+
+Then, we add another section to define the model inside `models/staging/schema.yml`. This section is used in particular
+to document the model and to add tests.
+
+**File `models/staging/schema.yml`**
+```sql
+with tripdata as
+(
+  select *,
+    row_number() over(partition by vendorid, lpep_pickup_datetime) as rn
+  from {{ source('staging','green_tripdata') }}
+  where vendorid is not null
+)
+
+select
+...
+from tripdata
+where rn = 1
+```
+
+**File `models/staging/stg_yellow_tripdata.sql`**
+
+``` sql
+with tripdata as
+(
+  select *,
+    row_number() over(partition by vendorid, tpep_pickup_datetime) as rn
+  from {{ source('staging','yellow_tripdata') }}
+  where vendorid is not null
+)
+select
+...
+from tripdata
+where rn = 1
+```
+
+Run `dbt build` command and everything should be green.
+
+![p107](images/dbt-test.png)
+
+### What is deployment?
+
+> 0:00/13:56 (4.4.1) Theory
+
+Running dbt in production means setting up a system to run a *dbt job on a schedule*, rather than running dbt commands
+manually from the command line.
+
+In addition to setting up a schedule, there are other considerations when setting up dbt to run in production.
+
+- Process of running the models we created in our development environment in a production environment
+- Development and later deployment allows us to continue building models and testing them without affecting our
+  production environment
+- A deployment environment will normally have a different schema in our data warehouse and ideally a different user
+- A development - deployment workflow will be something like:
+  - Develop in a user branch
+  - Open a PR to merge into the main branch
+  - Merge the branch to the main branch
+  - Run the new models in the production environment using the main branch
+  - Schedule the models
+
+![p108](images/dbt-pipelines.png)
+
+See [About deployments](https://docs.getdbt.com/docs/deploy/deployments) for more.
+
+### Running a dbt project in production
+
+- dbt cloud includes a scheduler where to create jobs to run in production
+- A single job can run multiple commands
+- Jobs can be triggered manually or on schedule
+- Each job will keep a log of the runs over time
+- Each run will have the logs for each command
+- A job could also generate documentation, that could be viewed under the run information
+- If dbt source freshness was run, the results can also be viewed at the end of a job
+
+### What is Continuous Integration (CI)?
+
+- CI is the practice of regularly merge development branches into a central repository, after which automated builds and
+  tests are run.
+- The goal is to reduce adding bugs to the production code and maintain a more stable project.
+- dbt allows us to enable CI on pull requests (PR)
+- Enabled via webhooks from GitHub or GitLab
+- When a PR is ready to be merged, a webhooks is received in dbt Cloud that will enqueue a new run of the specified job.
+- The run of the CI job will be against a temporary schema
+- No PR will be able to be merged unless the run has been completed successfully
+
+### How to do this with dbt cloud (Alternative A)
+
+In dbt cloud, commit **my-new-branch** and pull request. Next, in my GitHub repository
+[taxi_rides_ny](https://github.com/hauct/week_4_taxi-rides-ny.git), I merge this pull request to my **main branch**.
+
+Now go to **Environments** (**Deploy \> Environments**) and click on **Create Environment** button.
+
+Create the new environment with this information:
+
+- **Name**: Production
+- **dbt Version**: 1.6 (latest)
+- **Dataset**: production
+
+Click on **Save** button.
+
+<table>
+<tr><td>
+<img src="images/dbt-create-env1.png">
+</td><td>
+<img src="images/dbt-create-env2.png">
+</td></tr>
+</table>
+
+Now go to **Jobs** (**Deploy \> Jobs**) and click on **Create New Job** button.
+
+Create the new job with this information:
+
+- **Job Name**: dbt build
+- **Environment**: Production
+- **dbt Version**: Inherited from Production (1.6 (latest))
+- **Target Name**: default
+- **Threads**: 4
+- **Run Timeout**: 0
+- **Generate docs on run**: Selected
+- **Commands**:
+  - `dbt seed`
+  - `dbt run --vars 'is_test_run: false'`
+  - `dbt test --vars 'is_test_run: false'`
+- **Triggers**:
+  - **Run on schedule**: Selected
+  - Every day
+  - Every 6 hours (starting at modnight UTC)
+
+Under **Continous Integration (CI)** tab, we could select **Run on Pull Request** if we want to.
+
+Click on **Save** button.
+
+Let’s run this by clicking on **Run now** button.
+
+**Run Overview**
+
+
+
