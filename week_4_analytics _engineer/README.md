@@ -1872,5 +1872,148 @@ Let’s run this by clicking on **Run now** button.
 
 **Run Overview**
 
+![p109](images/dbt-deployment-run.png)
+
+We should see :
+
+- **Run Timing** tab showing run steps
+- **Model Timing** tab (unfortunately, the diagram does not appear)
+- **Artifacts** tab showing all generated files
+- **View Documentation** link showing the documentation in a beautiful website.
+
+Under **Run Timing** tab, below the log for `dbt run --vars 'is_test_run: false'`.
+
+✅ **Invoke** `dbt run --vars 'is_test_run: false'`
+
+```txt
+04:43:22 2 of 5 START sql view model production.stg_green_tripdata ...................... [RUN]
+04:43:22 3 of 5 START sql view model production.stg_yellow_tripdata ..................... [RUN]
+04:43:23 3 of 5 OK created sql view model production.stg_yellow_tripdata ................ [CREATE VIEW (0 processed) in 0.76s]
+04:43:24 2 of 5 OK created sql view model production.stg_green_tripdata ................. [CREATE VIEW (0 processed) in 1.35s]
+04:43:25 1 of 5 OK created sql table model production.dim_zones ......................... [CREATE TABLE (265.0 rows, 14.2 KiB processed) in 2.89s]
+04:43:25 4 of 5 START sql table model production.fact_trips ............................. [RUN]
+04:43:37 4 of 5 OK created sql table model production.fact_trips ........................ [CREATE TABLE (33.6m rows, 8.5 GiB processed) in 11.55s]
+04:43:37 5 of 5 START sql table model production.dm_monthly_zone_revenue ................ [RUN]
+04:43:41 5 of 5 OK created sql table model production.dm_monthly_zone_revenue ........... [CREATE TABLE (6.3k rows, 7.3 GiB processed) in 4.09s]
+04:43:41  
+04:43:41
+04:43:41  Finished running 2 view models, 3 table models in 0 hours 0 minutes and 19.06 seconds (19.06s).
+04:43:41  
+04:43:41
+04:43:41  Completed successfully
+04:43:41  
+04:43:41
+04:43:41  Done. PASS=5 WARN=0 ERROR=0 SKIP=0 TOTAL=5
+```
+
+Under **Run Timing** tab, below the log for `dbt test --vars 'is_test_run: false'`.
+
+✅ **Invoke** `dbt test --vars 'is_test_run: false'`
+
+```txt
+04:43:51 9 of 11 START test relationships_stg_yellow_tripdata_dropoff_locationid__locationid__ref_taxi_zone_lookup_  [RUN]
+04:43:52 7 of 11 PASS relationships_stg_green_tripdata_dropoff_locationid__locationid__ref_taxi_zone_lookup_  [PASS in 1.61s]
+04:43:52 10 of 11 START test unique_stg_green_tripdata_tripid ........................... [RUN]
+04:43:52 5 of 11 PASS not_null_stg_yellow_tripdata_tripid ............................... [PASS in 2.60s]
+04:43:52 11 of 11 START test unique_stg_yellow_tripdata_tripid .......................... [RUN]
+04:43:53 10 of 11 PASS unique_stg_green_tripdata_tripid ................................. [PASS in 1.91s]
+04:43:54 8 of 11 PASS relationships_stg_yellow_tripdata_Pickup_locationid__locationid__ref_taxi_zone_lookup_  [PASS in 3.05s]
+04:43:55 9 of 11 PASS relationships_stg_yellow_tripdata_dropoff_locationid__locationid__ref_taxi_zone_lookup_  [PASS in 3.42s]
+04:43:57 11 of 11 PASS unique_stg_yellow_tripdata_tripid ................................ [PASS in 4.98s]
+04:43:57  
+04:43:57
+04:43:57  Finished running 11 tests in 0 hours 0 minutes and 9.03 seconds (9.03s).
+04:43:57  
+04:43:57
+04:43:57  Completed successfully
+04:43:57  
+04:43:57
+04:43:57  Done. PASS=11 WARN=0 ERROR=0 SKIP=0 TOTAL=11
+```
+
+<table>
+<tr><td>
+<img src="images/dbt-doc-stg-green.png">
+</td><td>
+<img src="images/dbt-fact-trips.png">
+</td></tr>
+</table>
+
+Documentation
+
+Go back to dbt cloud, go to **Account Settings**. Select the project **Analytics**. Under **Artifacts**, I could select the previous job.
+
+Click on **Save** button. Now, I have the documentation of the project directly in dbt cloud.
+
+
+## Visualize data with Looker Studio (Alternative A)
+
+### Looker Studio (Google Data Studio)
+
+Looker Studio, formerly Google Data Studio, is an online tool for converting data into customizable informative reports
+and dashboards introduced by Google on March 15, 2016 as part of the enterprise Google Analytics 360 suite. In May 2016,
+Google announced a free version of Data Studio for individuals and small teams. See
+<https://en.wikipedia.org/wiki/Looker_Studio>.
+
+Go to [Looker Studio](https://lookerstudio.google.com/u/0/) and follow these steps:
+
+- Make sure you are in the correct Google account.
+- Create a **Data sources**.
+- Select **BigQuery**.
+- **Authorize** Looker Studio to connect to your **BigQuery** projects.
+- Select the project id `ny-rides-alexey`.
+- Select dataset `production`.
+- Select table `fact_trips`.
+- Click on **CONNECT** button.
+
+<table>
+<tr><td>
+<img src="images/gl-connect1.png">
+</td><td>
+<img src="images/gl-connect2.png">
+</td></tr>
+</table>
+
+Changes default aggregations. Select **Sum** only for `passenger_count`.
+
+We create 5 charts:
+
+- A time series chart for **Amount of trip per day and service type**.
+- Change default data range from **1 January 2019** to **31 December 2020**.
+- A scorecard for **Total trips recorded**
+- A pie chart for **Service type distribution**.
+- A table for **Trips per pickup zone**.
+- A stacked column bar for **Trips per month and year**.
+
+You can check the dashboard [here](https://lookerstudio.google.com/s/r0OEwL_h-Sw)
+
+
+## Advanced knowledge
+
+- [Make a model
+  Incremental](https://docs.getdbt.com/docs/building-a-dbt-project/building-models/configuring-incremental-models)
+- [Use of tags](https://docs.getdbt.com/reference/resource-configs/tags)
+- [Hooks](https://docs.getdbt.com/docs/building-a-dbt-project/hooks-operations)
+- [Analysis](https://docs.getdbt.com/docs/building-a-dbt-project/analyses)
+- [Snapshots](https://docs.getdbt.com/docs/building-a-dbt-project/snapshots)
+- [Exposure](https://docs.getdbt.com/docs/building-a-dbt-project/exposures)
+- [Metrics](https://docs.getdbt.com/docs/building-a-dbt-project/metrics)
+
+## Workshop: Maximizing Confidence in Your Data Model Changes with dbt and PipeRider
+
+To learn how to use PipeRider together with dbt for detecting changes in model and data, sign up for a workshop
+[here](https://www.eventbrite.com/e/maximizing-confidence-in-your-data-model-changes-with-dbt-and-piperider-tickets-535584366257).
+
+## Useful links
+
+- [Visualizing data with Metabase course](https://www.metabase.com/learn/visualization/)
+- [Data Engineer Roadmap 2021](https://github.com/datastacktv/data-engineer-roadmap/blob/master/README.md)
+
+
+
+
+
+
+
 
 
