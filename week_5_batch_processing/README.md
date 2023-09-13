@@ -211,18 +211,469 @@ Last login: Tue Sep 12 10:34:37 2023 from 1.53.255.144
 (base) hauct@de-zoomcamp:~$
 ```
 
+#### Install Java
 
+Download OpenJDK 11 or Oracle JDK 11. It’s important that the version is 11 because Spark requires 8 or 11.
 
+Here, we will use OpenJDK. This [page](https://jdk.java.net/archive/) is an archive of previously released builds of the
+OpenJDK.
 
+To install Java, run the following commands.
 
+``` bash
+# Create directory.
+> mkdir spark
+> cd spark
 
+# Download and unpack OpenJDK.
+> wget https://download.java.net/java/GA/jdk11/9/GPL/openjdk-11.0.2_linux-x64_bin.tar.gz
+> tar xzfv openjdk-11.0.2_linux-x64_bin.tar.gz
+> ls
+jdk-11.0.2
+> pwd
+/home/hauct/spark
 
+# Setup Java.
+> export JAVA_HOME="${HOME}/spark/jdk-11.0.2"
+> export PATH="${JAVA_HOME}/bin:${PATH}"
+> java --version
+openjdk 11.0.2 2019-01-15
+OpenJDK Runtime Environment 18.9 (build 11.0.2+9)
+OpenJDK 64-Bit Server VM 18.9 (build 11.0.2+9, mixed mode)
 
+# Remove the archive.
+> rm openjdk-11.0.2_linux-x64_bin.tar.gz
+```
 
+#### Install Spark
 
+Go to this [page](https://spark.apache.org/downloads.html) to download Apache Spark.
 
+We will use Spark **3.4.1 (June 23 2023)** version and package type **Pre-built for Apache Hadoop 3.4 and later**.
 
+To install Spark, run the following commands.
 
+``` bash
+# Download and unpack Spark 3.4.1.
+> wget https://dlcdn.apache.org/spark/spark-3.4.1/spark-3.4.1-bin-hadoop3.tgz
+> tar xzfv spark-3.4.1-bin-hadoop3.tgz
+
+# Setup Spark.
+> export SPARK_HOME="${HOME}/spark/spark-3.4.1-bin-hadoop3"
+> export PATH="${SPARK_HOME}/bin:${PATH}"
+
+# Remove the archive.
+> rm spark-3.4.1-bin-hadoop3.tgz
+```
+
+Now let’s check if spark is working
+
+Execute `spark-shell` and run the following in scala. You can ignore the warnings.
+
+``` scala
+val data = 1 to 10000
+val distData = sc.parallelize(data)
+distData.filter(_ < 10).collect()
+```
+
+You should see something like this
+
+```bash
+(base) hauct@de-zoomcamp:~/spark$ spark-shell
+Setting default log level to "WARN".
+To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
+23/09/13 05:45:33 WARN NativeCodeLoader: Unable to load native-hadoop library for your platform... using builtin-java classes where applicable
+Spark context Web UI available at http://de-zoomcamp.asia-southeast1-b.c.ny-rides-alexey-396910.internal:4040
+Spark context available as 'sc' (master = local[*], app id = local-1694583934389).
+Spark session available as 'spark'.
+Welcome to
+      ____              __
+     / __/__  ___ _____/ /__
+    _\ \/ _ \/ _ `/ __/  '_/
+   /___/ .__/\_,_/_/ /_/\_\   version 3.4.1
+      /_/
+
+Using Scala version 2.12.17 (OpenJDK 64-Bit Server VM, Java 11.0.2)
+Type in expressions to have them evaluated.
+Type :help for more information.
+
+scala>
+```
+
+To close Spark shell, you press `Ctrl+D` or type in `:quit` or `:q`.
+
+#### Add PATH to `.bashrc` file
+
+Add these lines to the bottom of the `.bashrc` file. Use `nano .bashrc`.
+
+You will need to change to your home dir, for example: in my case, it will be `/home/hauct`
+
+``` bash
+export JAVA_HOME="${HOME}/spark/jdk-11.0.2"
+export PATH="${JAVA_HOME}/bin:${PATH}"
+
+export SPARK_HOME="${HOME}/spark/spark-3.4.1-bin-hadoop3"
+export PATH="${SPARK_HOME}/bin:${PATH}"
+```
+
+Press `Ctrl+O` to save the file and `Ctrl+X` to exit.
+
+Then run the following commands.
+
+``` bash
+> source .bashrc
+
+# Quit the server.
+> logout
+
+# Connect to Ubuntu server.
+> ssh de-zoomcamp
+> which java
+/home/hauct/spark/jdk-11.0.2/bin/java
+> which pyspark
+/home/hauct/spark/spark-3.4.1-bin-hadoop3/bin/pyspark
+```
+
+#### How to use PySpark
+
+To run PySpark, we first need to add it to `PYTHONPATH`.
+
+`PYTHONPATH` is a special environment variable that provides guidance to the Python interpreter about where to find
+various libraries and applications. See [Understanding the Python Path Environment Variable in
+Python](https://www.simplilearn.com/tutorials/python-tutorial/python-path) for more information.
+
+So, I add these instructions to the bottom of cloud VM `~/.bashrc` file with `nano ~/.bashrc`.
+
+``` bash
+export PYTHONPATH="${SPARK_HOME}/python/:$PYTHONPATH"
+export PYTHONPATH="${SPARK_HOME}/python/lib/py4j-0.10.9.5-src.zip:$PYTHONPATH"
+```
+Make sure that the version under `$SPARK_HOME/python/lib/` matches the filename of `py4j` or you will encounter
+`ModuleNotFoundError: No module named 'py4j'` while executing `import pyspark`.
+
+Press `Ctrl+O` to save and `Ctrl+X` to exit.
+
+Then, run this command: `source ~/.bashrc`.
+
+#### Connect with Visual Studio Code (VS Code)
+
+Because this is a remote machine, we will connect to this machine with Visual Studio Code (VS Code).
+
+In VS Code, find and install the **Remote - SSH extension**. Then go to the **Command Palette** (`Shift+Cmd+P`)
+and select **Remote-SSH: Connect to Host…​** and **de-zoomcamp**. A new VS Code window should appear.
+
+In VS Code, open the terminal, and open the port `8888`.
+
+A **port** is basically an address on your computer. By default, Jupyter uses port `8888` to let you talk to it (you can
+see this in the URL when you’re looking at a notebook: `localhost:8888`).
+
+![p113](images/port-8888.png)
+
+Start Jupyter notebook in a new folder on the cloud VM.
+
+``` bash
+> mkdir notebooks
+> cd notebooks
+> jupyter notebook
+```
+
+Copy and paste one of the URLs (I have <http://localhost:8888/?token=5554b767feff5ecefbb974795a8d5140867c80dc46852c00>)
+to the browser.
+
+In Jupyter, create a new notebook with the **Python 3 (ipykernel)**, name it `03_test.ipynb`
+
+``` python
+import pyspark
+print(pyspark.__version__)
+print(pyspark.__file__)
+# 3.4.1
+# /home/hauct/spark/spark-3.4.1-bin-hadoop3/python/pyspark/__init__.py
+```
+
+In Jupyter, download the taxi zone lookup file.
+
+``` bash
+!wget https://s3.amazonaws.com/nyc-tlc/misc/taxi+_zone_lookup.csv
+!head taxi+_zone_lookup.csv
+```
+
+![p114](images/03_test.png)
+
+Now, read this file with Spark.
+
+The entry point into all functionality in Spark is the
+[SparkSession](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.SparkSession.html)
+class.
+
+A SparkSession can be used create
+[DataFrame](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.html#pyspark.sql.DataFrame),
+register DataFrame as tables, execute SQL over tables, cache tables, and read parquet files.
+
+To create a basic SparkSession, just use `SparkSession.builder`.
+
+Also, we need to set:
+
+- the Spark `master` URL to connect to, such as `local` to run locally, `local[4]` to run locally with 4 cores, or
+  `spark://master:7077` to run on a Spark standalone cluster;
+- the `appName` for the application, which will be shown in the Spark Web UI. If no application name is set, a randomly
+  generated name will be used;
+- how to get an existing SparkSession or, if there is no existing one, create a new one based on the options set in this
+  builder.
+
+Run this PySpark script into Jupyter.
+
+``` python
+import pyspark
+from pyspark.sql import SparkSession
+
+spark.sparkContext.setLogLevel("ERROR")
+
+spark = SparkSession.builder \
+    .master("local[*]") \
+    .appName('test') \
+    .getOrCreate()
+
+df = spark.read \
+    .option("header", "true") \
+    .csv('taxi+_zone_lookup.csv')
+
+df.show()
+```
+
+You should see this
+
+![p115](images/test-pyspark.png)
+
+Test that writing works too.
+
+``` python
+df.write.parquet('zones')
+!ls -lh
+# total 44K
+# -rw-rw-r-- 1 hauct hauct 5.3K Sep 13 08:21 03_test.ipynb
+# -rw-rw-r-- 1 hauct hauct  13K Aug 17  2016 taxi+_zone_lookup.csv
+# -rw-rw-r-- 1 hauct hauct  13K Aug 17  2016 taxi+_zone_lookup.csv.1
+# drwxr-xr-x 2 hauct hauct 4.0K Sep 13 08:52 zones
+!ls zones/
+# _SUCCESS  part-00000-2146f15a-147e-405d-ae07-44d96194db7d-c000.snappy.parquet
+# total 8.0K
+# -rw-r--r-- 1 hauct hauct    0 Sep 13 08:52 _SUCCESS
+# -rw-r--r-- 1 hauct hauct 5.8K Sep 13 08:52 part-00000-2146f15a-147e-405d-ae07-44d96194db7d-c000.snappy.parquet
+```
+
+One more thing… ​In VS Code, open the terminal, and open the port `4040`. Then open the web browser to `localhost:4040/jobs/`.
+
+We should see this.
+
+![p116](images/spark-job-ui.png)
+
+Every SparkContext launches a web UI, by default on port 4040, that displays useful information about the application.
+This includes:
+
+- A list of scheduler stages and tasks
+- A summary of RDD sizes and memory usage
+- Environmental information
+- Information about the running executors
+
+You can access this interface by simply opening `http://<driver-node>:4040` in a web browser. If multiple SparkContexts
+are running on the same host, they will bind to successive ports beginning with 4040 (4041, 4042, etc).
+
+See [Monitoring and Instrumentation](https://spark.apache.org/docs/2.2.3/monitoring.html) for more.
+
+## 5.3 Spark SQL and DataFrames
+
+### 5.3.1 First Look at Spark/PySpark
+
+We will cover:
+
+- Reading CSV files
+- Partitions
+- Saving data to Parquet for local experiments
+- Spark master UI
+
+#### Start Jupyter on remote machine
+
+Run enter to the remote machine and clone a latest version of the de-zoomcamp repo.
+
+``` bash
+> ssh de-zoomcamp
+> git clone https://github.com/DataTalksClub/data-engineering-zoomcamp.git
+```
+
+Start Jupyter notebook on the cloud VM.
+
+``` bash
+> cd
+> cd data-engineering-zoomcamp/
+> cd week_5_batch_processing/
+> jupyter notebook
+```
+
+Copy and paste one of the URLs to the web browser.
+
+Make sure ports `8888` and `4040` are open. If not, see instructions in previous section.
+
+#### Read file with PySpark
+
+Create a new notebook with the **Python 3 (ipykernel)**, or open `code/04_pyspark.ipynb` file directly.
+
+Open a Spark session.
+
+``` python
+import pyspark
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .master("local[*]") \
+    .appName('test') \
+    .getOrCreate()
+```
+
+Download this file.
+
+``` python
+!wget https://github.com/DataTalksClub/nyc-tlc-data/releases/download/fhvhv/fhvhv_tripdata_2021-01.csv.gz
+```
+
+Unzip it.
+
+``` bash
+%%sh
+gzip -d fhvhv_tripdata_2021-01.csv.gz
+!ls -lh fhvhv_tripdata_2021-01.*
+!wc -l fhvhv_tripdata_2021-01.csv
+```
+
+And read this file
+
+``` python
+df = spark.read \
+    .option("header", "true") \
+    .csv('fhvhv_tripdata_2021-01.csv')
+
+df.show()
+```
+
+#### Define the structure of the DataFrame
+
+Prints out the schema in the tree format.
+
+``` python
+>>> df.printSchema()
+root
+ |-- hvfhs_license_num: string (nullable = true)
+ |-- dispatching_base_num: string (nullable = true)
+ |-- pickup_datetime: string (nullable = true)
+ |-- dropoff_datetime: string (nullable = true)
+ |-- PULocationID: string (nullable = true)
+ |-- DOLocationID: string (nullable = true)
+ |-- SR_Flag: string (nullable = true)
+```
+
+We see that the columns are all in string. By default, Spark does not try to infer column types.
+
+Prints the first 5 rows.
+
+``` python
+>>> df.head(5)
+[Row(hvfhs_license_num='HV0003', dispatching_base_num='B02682', pickup_datetime='2021-01-01 00:33:44',
+dropoff_datetime='2021-01-01 00:49:07', PULocationID='230', DOLocationID='166', SR_Flag=None),
+ Row(hvfhs_license_num='HV0003', dispatching_base_num='B02682', pickup_datetime='2021-01-01 00:55:19',
+ dropoff_datetime='2021-01-01 01:18:21', PULocationID='152', DOLocationID='167', SR_Flag=None),
+ Row(hvfhs_license_num='HV0003', dispatching_base_num='B02764', pickup_datetime='2021-01-01 00:23:56',
+ dropoff_datetime='2021-01-01 00:38:05', PULocationID='233', DOLocationID='142', SR_Flag=None),
+ Row(hvfhs_license_num='HV0003', dispatching_base_num='B02764', pickup_datetime='2021-01-01 00:42:51',
+ dropoff_datetime='2021-01-01 00:45:50', PULocationID='142', DOLocationID='143', SR_Flag=None),
+ Row(hvfhs_license_num='HV0003', dispatching_base_num='B02764', pickup_datetime='2021-01-01 00:48:14',
+ dropoff_datetime='2021-01-01 01:08:42', PULocationID='143', DOLocationID='78', SR_Flag=None)]
+```
+
+Create a file with only the first 1001 lines.
+
+``` python
+!head -n 1001 fhvhv_tripdata_2021-01.csv > head.csv
+```
+
+Read this small file in pandas.
+
+``` python
+>>> import pandas as pd
+>>> df_pandas = pd.read_csv('head.csv')
+>>> df_pandas.info()
+<class 'pandas.core.frame.DataFrame'>
+RangeIndex: 1000 entries, 0 to 999
+Data columns (total 7 columns):
+ #   Column                Non-Null Count  Dtype
+---  ------                --------------  -----
+ 0   hvfhs_license_num     1000 non-null   object
+ 1   dispatching_base_num  1000 non-null   object
+ 2   pickup_datetime       1000 non-null   object
+ 3   dropoff_datetime      1000 non-null   object
+ 4   PULocationID          1000 non-null   int64
+ 5   DOLocationID          1000 non-null   int64
+ 6   SR_Flag               0 non-null      float64
+dtypes: float64(1), int64(2), object(4)
+memory usage: 54.8+ KB
+```
+
+Create a Spark
+[DataFrame](https://spark.apache.org/docs/3.1.1/api/python/reference/api/pyspark.sql.DataFrame.html#pyspark.sql.DataFrame)
+
+Spark provides `spark.sql.types.StructType` class to define the structure of the DataFrame and It is a collection or
+list on StructField objects.
+
+All of the data types shown below are supported in Spark and the DataType class is a base class for all them.
+
+- StringType
+- ArrayType
+- MapType
+- StructType
+- DateType
+- TimestampType
+- BooleanType
+- CalendarIntervalType
+- BinaryType
+- NumericType
+- ShortType
+- IntegerType
+- LongType
+- FloatType
+- DoubleType
+- DecimalType
+- ByteType
+- HiveStringType
+- ObjectType
+- NullType
+
+See [Spark SQL Data Types with Examples](https://sparkbyexamples.com/spark/spark-sql-dataframe-data-types/) for more.
+
+So, the preferred option while reading any file would be to enforce a custom schema, this ensures that the data types
+are consistent and avoids any unexpected behavior.
+
+In order to do that you first declare the schema to be enforced, and then read the data by setting `schema` option.
+
+``` python
+from pyspark.sql import types
+
+schema = types.StructType([
+    types.StructField('hvfhs_license_num', types.StringType(), True),
+    types.StructField('dispatching_base_num', types.StringType(), True),
+    types.StructField('pickup_datetime', types.TimestampType(), True),
+    types.StructField('dropoff_datetime', types.TimestampType(), True),
+    types.StructField('PULocationID', types.IntegerType(), True),
+    types.StructField('DOLocationID', types.IntegerType(), True),
+    types.StructField('SR_Flag', types.StringType(), True)
+])
+
+df = spark.read \
+    .option("header", "true") \
+    .schema(schema) \
+    .csv('fhvhv_tripdata_2021-01.csv')
+
+df.printSchema()
+```
+
+![p117](images/04_pyspark-schema-parse.png)
 
 
 
