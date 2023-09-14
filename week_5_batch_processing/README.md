@@ -675,6 +675,139 @@ df.printSchema()
 
 ![p117](images/04_pyspark-schema-parse.png)
 
+We should see this.
 
+``` txt
+root
+ |-- hvfhs_license_num: string (nullable = true)
+ |-- dispatching_base_num: string (nullable = true)
+ |-- pickup_datetime: timestamp (nullable = true)
+ |-- dropoff_datetime: timestamp (nullable = true)
+ |-- PULocationID: integer (nullable = true)
+ |-- DOLocationID: integer (nullable = true)
+ |-- SR_Flag: string (nullable = true)
+```
 
+**Note**: The other way to infer the schema (apart from pandas) for the csv files, is to set the `inferSchema` option to
+`true` while reading the files in Spark.
+
+#### Save as partitioned parquet files
+
+A **Spark cluster** is made up of multiple **executors**. Each executor can process data independently to parallelize
+and speed up work.
+
+In the previous example, we are reading a single large CSV file. A file can only be read by a single executor, which
+means that the code we have written so far is not parallelized and will therefore only be executed by a single executor
+rather than several at the same time.
+
+In order to solve this problem, we can split a file into several parts so that each executor can take care of one part
+and all executors work simultaneously. These splits are called **partitions**.
+
+Spark/PySpark partitioning is a way to split the data into multiple partitions so that you can execute transformations
+on multiple partitions in parallel which allows completing the job faster. See [Spark Partitioning & Partition
+Understanding](https://sparkbyexamples.com/spark/spark-partitioning-understanding/) for more.
+
+Spark DataFrame `repartition()` method is used to increase or decrease the partitions. This is very expensive operation
+as it shuffle the data across many partitions hence try to minimize repartition as much as possible.
+
+Let’s run this.
+
+``` python
+# Create 24 partitions in our dataframe.
+df = df.repartition(24)
+# Parquetize and write to fhvhv/2021/01/ folder.
+df.write.parquet('fhvhv/2021/01/')
+```
+
+You can check out the Spark UI at any time and see the progress of the current task, which is divided into steps
+containing tasks. Tasks in a stage will not start until all tasks in the previous stage are complete.
+
+When creating a dataframe, Spark creates as many partitions as available CPU cores by default, and each partition
+creates a task. So, assuming that the dataframe was initially partitioned into 6 partitions, the `write.parquet()`
+method will have 2 stages: the first with 6 tasks and the second with 24 tasks.
+
+Besides the 24 Parquet files, you should also see a `_SUCCESS` file which should be empty. This file is created when the
+job completes successfully.
+
+### 5.3.2 Spark DataFrames
+
+We will cover:
+
+- Actions vs tranfromations
+- Functions and UDFs
+
+We can read the parquet files that we created in the last section with this command.
+
+``` python
+>>> df = spark.read.parquet('fhvhv/2021/01/')
+>>> df.printSchema()
+root
+ |-- hvfhs_license_num: string (nullable = true)
+ |-- dispatching_base_num: string (nullable = true)
+ |-- pickup_datetime: timestamp (nullable = true)
+ |-- dropoff_datetime: timestamp (nullable = true)
+ |-- PULocationID: integer (nullable = true)
+ |-- DOLocationID: integer (nullable = true)
+ |-- SR_Flag: string (nullable = true)
+```
+
+[DataFrame.select](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.select.html)
+DataFrame.select is a transformation function that returns a new DataFrame with the desired columns as specified in the
+inputs.
+
+[DataFrame.filter](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.filter.html)
+filters rows using the given condition.
+
+For example…​
+
+``` python
+df.select('pickup_datetime', 'dropoff_datetime', 'PULocationID', 'DOLocationID') \
+  .filter(df.hvfhs_license_num == 'HV0003')
+```
+
+I we run this code, nothing happens. The execution is Lazy by default for Spark. This means all the operations over an
+RDD/DataFrame/Dataset are never computed until the action is called.
+
+#### Actions vs Transformations
+
+Spark support two types of operations: **transformations**, which create a new dataset from an existing one, and
+**actions**, which return a value to the driver program after running a computation on the dataset.
+
+All transformations in Spark are lazy, in that they do not compute their results right away. Instead, they just remember
+the transformations applied to some base dataset (e.g. a file). The transformations are only computed when an action
+requires a result to be returned to the driver program. This design enables Spark to run more efficiently.
+
+- Transformations: Lazy (not executed immediatly)
+  - Selecting columns
+  - Filtering
+  - Join, GroupBy
+  - etc.
+- Actions: Eager (executed immediatly)
+  - Show, Take, Head
+  - Write
+  - etc.
+
+See [RDD Programming Guide](https://spark.apache.org/docs/latest/rdd-programming-guide.html) for more information.
+
+- [Transformations](https://spark.apache.org/docs/latest/rdd-programming-guide.html#transformations)
+- [Actions](https://spark.apache.org/docs/latest/rdd-programming-guide.html#actions)
+
+So, to make the computation happen, we must add instruction like `.show()`.
+
+``` python
+df.select('pickup_datetime', 'dropoff_datetime', 'PULocationID', 'DOLocationID') \
+  .filter(df.hvfhs_license_num == 'HV0003')
+  .show()
+```
+
+#### Functions avalaible in Spark
+
+Besides the SQL and Pandas-like commands we’ve seen so far, Spark provides additional built-in functions that allow for
+more complex data manipulation. By convention, these functions are imported as follows:
+
+``` python
+from pyspark.sql import functions as F
+```
+
+In a new cell, insert `F.` and press on `Tab` to show completion options.
 
