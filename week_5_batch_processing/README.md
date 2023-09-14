@@ -497,7 +497,7 @@ Run enter to the remote machine and clone a latest version of the de-zoomcamp re
 
 ``` bash
 > ssh de-zoomcamp
-> git clone https://github.com/DataTalksClub/data-engineering-zoomcamp.git
+> git clone https://github.com/hauct/de-zoomcamp.git
 ```
 
 Start Jupyter notebook on the cloud VM.
@@ -796,7 +796,7 @@ So, to make the computation happen, we must add instruction like `.show()`.
 
 ``` python
 df.select('pickup_datetime', 'dropoff_datetime', 'PULocationID', 'DOLocationID') \
-  .filter(df.hvfhs_license_num == 'HV0003')
+  .filter(df.hvfhs_license_num == 'HV0003')\
   .show()
 ```
 
@@ -810,4 +810,366 @@ from pyspark.sql import functions as F
 ```
 
 In a new cell, insert `F.` and press on `Tab` to show completion options.
+
+![p118](images/vm-jupyter-f.png)
+
+
+See [functions](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/functions.html) for a list of
+built-in functions.
+
+Here’s an example of built-in function usage:
+
+``` python
+df \
+    .withColumn('pickup_date', F.to_date(df.pickup_datetime)) \
+    .withColumn('dropoff_date', F.to_date(df.dropoff_datetime)) \
+    .select('pickup_date', 'dropoff_date', 'PULocationID', 'DOLocationID') \
+    .show()
+```
+
+- `.withColumn()` is a transformation that adds a new column to the dataframe.
+  - Adding a new column with the same name as a previously existing column will overwrite the existing column.
+- `.select()` is another transformation that selects the stated columns.
+- `F.to_date()` is a built-in Spark function that converts a timestamp to date format (year, month and day only, no hour
+  and minute).
+- `.show()` is an action.
+
+![119](images/vm-jupyter-builtinfunction.png)
+
+#### User defined functions (UDF)
+
+> 9:23/14:09 (5.3.2) User defined functions
+
+Besides these built-in functions, Spark allows us to create **User Defined Functions** (UDFs) with custom behavior for
+those instances where creating SQL queries for that behaviour becomes difficult both to manage and test. In short, UDFs
+are user-programmable routines that act on one row.
+
+See [Scalar User Defined Functions (UDFs)](https://spark.apache.org/docs/latest/sql-ref-functions-udf-scalar.html) and
+[functions.udf](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.functions.udf.html#pyspark.sql.functions.udf)
+for more information.
+
+Here is an example using an UDF.
+
+``` python
+def crazy_stuff(base_num):
+    num = int(base_num[1:])
+    if num % 7 == 0:
+        return f's/{num:03x}'
+    elif num % 3 == 0:
+        return f'a/{num:03x}'
+    else:
+        return f'e/{num:03x}'
+
+crazy_stuff('B02884')  # Return 's/b44'
+
+crazy_stuff_udf = F.udf(crazy_stuff, returnType=types.StringType())
+
+df \
+    .withColumn('pickup_date', F.to_date(df.pickup_datetime)) \
+    .withColumn('dropoff_date', F.to_date(df.dropoff_datetime)) \
+    .withColumn('base_id', crazy_stuff_udf(df.dispatching_base_num)) \
+    .select('base_id', 'pickup_date', 'dropoff_date', 'PULocationID', 'DOLocationID') \
+    .show(5)
+```
+
+![p120](images/vm-jupyter-udf.png)
+
+### 5.3.4 SQL with Spark
+
+We will cover:
+
+- Temporary tables
+- Some simple queries from week 4
+
+Spark can run SQL queries, which can come in handy if you already have a Spark cluster and setting up an additional tool
+for sporadic use isn’t desirable.
+
+Let’s now load all of the yellow and green taxi data for 2020 and 2021 to Spark dataframes.
+
+#### Prepare the data
+
+Edit and change the `URL_PREFIX` of the
+
+Modify `code/download_data.sh` file like this.
+
+**File `code/download_data.sh`**
+
+``` bash
+# Stop when counter any bugs
+set -e
+
+URL_PREFIX="https://github.com/DataTalksClub/nyc-tlc-data/releases/download"
+
+for TAXI_TYPE in "yellow" "green"
+do
+    for YEAR in 2020 2021
+    do
+        for MONTH in {1..12}
+        do
+
+        if [ $YEAR == 2020 ] || [ $MONTH -lt 8 ]
+        then
+            FMONTH=`printf "%02d" ${MONTH}`
+
+            URL="${URL_PREFIX}/${TAXI_TYPE}/${TAXI_TYPE}_tripdata_${YEAR}-${FMONTH}.csv.gz"
+
+            LOCAL_PREFIX="data/raw/${TAXI_TYPE}/${YEAR}/${FMONTH}"
+            LOCAL_FILE="${TAXI_TYPE}_tripdata_${YEAR}_${FMONTH}.csv.gz"
+            LOCAL_PATH="${LOCAL_PREFIX}/${LOCAL_FILE}"
+
+            echo "donwloading ${URL} to ${LOCAL_PATH}"
+            mkdir -p ${LOCAL_PREFIX}
+            wget ${URL} -O ${LOCAL_PATH}
+        fi
+        done
+    done
+done
+```
+Then run this script to grant the access
+
+```bash
+chmod +x download_data.sh
+```
+
+After that, run `./download_data.sh`.
+
+In Jupyter, create a new note with **Python 3 (ipykernel)** and run the code below.
+
+**File `05_taxi_schema.ipynb`**
+
+``` python
+import pyspark
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .master("local[*]") \
+    .appName('test') \
+    .getOrCreate()
+
+import pandas as pd
+
+from pyspark.sql import types
+
+green_schema = types.StructType([
+    types.StructField("VendorID", types.IntegerType(), True),
+    types.StructField("lpep_pickup_datetime", types.TimestampType(), True),
+    types.StructField("lpep_dropoff_datetime", types.TimestampType(), True),
+    types.StructField("store_and_fwd_flag", types.StringType(), True),
+    types.StructField("RatecodeID", types.IntegerType(), True),
+    types.StructField("PULocationID", types.IntegerType(), True),
+    types.StructField("DOLocationID", types.IntegerType(), True),
+    types.StructField("passenger_count", types.IntegerType(), True),
+    types.StructField("trip_distance", types.DoubleType(), True),
+    types.StructField("fare_amount", types.DoubleType(), True),
+    types.StructField("extra", types.DoubleType(), True),
+    types.StructField("mta_tax", types.DoubleType(), True),
+    types.StructField("tip_amount", types.DoubleType(), True),
+    types.StructField("tolls_amount", types.DoubleType(), True),
+    types.StructField("ehail_fee", types.DoubleType(), True),
+    types.StructField("improvement_surcharge", types.DoubleType(), True),
+    types.StructField("total_amount", types.DoubleType(), True),
+    types.StructField("payment_type", types.IntegerType(), True),
+    types.StructField("trip_type", types.IntegerType(), True),
+    types.StructField("congestion_surcharge", types.DoubleType(), True)
+])
+
+yellow_schema = types.StructType([
+    types.StructField("VendorID", types.IntegerType(), True),
+    types.StructField("tpep_pickup_datetime", types.TimestampType(), True),
+    types.StructField("tpep_dropoff_datetime", types.TimestampType(), True),
+    types.StructField("passenger_count", types.IntegerType(), True),
+    types.StructField("trip_distance", types.DoubleType(), True),
+    types.StructField("RatecodeID", types.IntegerType(), True),
+    types.StructField("store_and_fwd_flag", types.StringType(), True),
+    types.StructField("PULocationID", types.IntegerType(), True),
+    types.StructField("DOLocationID", types.IntegerType(), True),
+    types.StructField("payment_type", types.IntegerType(), True),
+    types.StructField("fare_amount", types.DoubleType(), True),
+    types.StructField("extra", types.DoubleType(), True),
+    types.StructField("mta_tax", types.DoubleType(), True),
+    types.StructField("tip_amount", types.DoubleType(), True),
+    types.StructField("tolls_amount", types.DoubleType(), True),
+    types.StructField("improvement_surcharge", types.DoubleType(), True),
+    types.StructField("total_amount", types.DoubleType(), True),
+    types.StructField("congestion_surcharge", types.DoubleType(), True)
+])
+
+for taxi_type in ["yellow", "green"]:
+    if taxi_type == "yellow":
+        schema = yellow_schema
+    else:
+        schema = green_schema
+
+    for year in [2020, 2021]:
+        for month in range(1, 13):
+            if year == 2020 or month < 8:
+                print(f'processing data for {taxi_type}/{year}/{month}')
+
+                input_path = f'data/raw/{taxi_type}/{year}/{month:02d}/'
+                output_path = f'data/pq/{taxi_type}/{year}/{month:02d}/'
+
+                df_green = spark.read \
+                    .option("header", "true") \
+                    .schema(schema) \
+                    .csv(input_path)
+
+                df_green \
+                    .repartition(4) \
+                    .write.parquet(output_path)
+```
+
+This code will take time to run.
+
+#### Read parquet files with Spark
+
+In Jupyter, create a new note with **Python 3 (ipykernel)** with this code (or simply open `06_spark.sql.ipynb`).
+
+**File `06_spark_sql.ipynb`**
+
+``` python
+import pyspark
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .master("local[*]") \
+    .appName('test') \
+    .getOrCreate()
+
+df_green = spark.read.parquet('data/pq/green/*/*')
+df_yellow = spark.read.parquet('data/pq/yellow/*/*')
+```
+
+#### Combine two datasets into one
+
+We will create `trips_data` which is the combination of files `df_green` and `df_yellow`.
+
+``` python
+# Rename some columns.
+df_green = df_green \
+    .withColumnRenamed('lpep_pickup_datetime', 'pickup_datetime') \
+    .withColumnRenamed('lpep_dropoff_datetime', 'dropoff_datetime')
+df_yellow = df_yellow \
+    .withColumnRenamed('tpep_pickup_datetime', 'pickup_datetime') \
+    .withColumnRenamed('tpep_dropoff_datetime', 'dropoff_datetime')
+
+# Create the list of columns present in the two datasets
+# while preserving the order of the columns of the green dataset.
+common_colums = []
+yellow_columns = set(df_yellow.columns)
+
+for col in df_green.columns:
+    if col in yellow_columns:
+        common_colums.append(col)
+
+# Create a column `service_type` indicating where the data comes from.
+from pyspark.sql import functions as F
+
+df_green_sel = df_green \
+    .select(common_colums) \
+    .withColumn('service_type', F.lit('green'))
+
+df_yellow_sel = df_yellow \
+    .select(common_colums) \
+    .withColumn('service_type', F.lit('yellow'))
+
+# Create a new DataFrame containing union of rows of green and yellow DataFrame.
+df_trips_data = df_green_sel.unionAll(df_yellow_sel)
+```
+
+See
+[DataFrame.unionAll](https://spark.apache.org/docs/latest/api/python/reference/pyspark.sql/api/pyspark.sql.DataFrame.unionAll.html)
+for more information.
+
+To check if the combination of the two files worked, run the following code
+
+``` python
+df_trips_data.groupBy('service_type').count().show()
+```
+
+We should see this.
+
+![p121](images/vm-jupyter-union.png)
+
+#### Querying this data with SQL
+
+First, let’s get all column names as a list.
+
+``` python
+>>> df_trips_data.columns
+['VendorID',
+ 'pickup_datetime',
+ 'dropoff_datetime',
+ 'store_and_fwd_flag',
+ 'RatecodeID',
+ 'PULocationID',
+ 'DOLocationID',
+ 'passenger_count',
+ 'trip_distance',
+ 'fare_amount',
+ 'extra',
+ 'mta_tax',
+ 'tip_amount',
+ 'tolls_amount',
+ 'improvement_surcharge',
+ 'total_amount',
+ 'payment_type',
+ 'congestion_surcharge',
+ 'service_type']
+```
+
+Write a query. We also need to create a local temporary view with the DataFrame. See
+[DataFrame.createOrReplaceTempView](https://spark.apache.org/docs/3.1.3/api/python/reference/api/pyspark.sql.DataFrame.createOrReplaceTempView.html).
+
+``` python
+# df_trips_data.registerTempTable('trips_data') # Deprecated.
+df_trips_data.createOrReplaceTempView("trips_data")
+
+spark.sql("""
+SELECT
+    service_type,
+    count(1)
+FROM
+    trips_data
+GROUP BY
+    service_type
+""").show()
+```
+
+We should see this.
+
+![p122](images/vm-jupyter-tempview.png)
+
+We can execute a more complicated query like this.
+
+``` python
+df_result = spark.sql("""
+SELECT
+    -- Reveneue grouping
+    PULocationID AS revenue_zone,
+    date_trunc('month', pickup_datetime) AS revenue_month,
+    service_type,
+
+    -- Revenue calculation
+    SUM(fare_amount) AS revenue_monthly_fare,
+    SUM(extra) AS revenue_monthly_extra,
+    SUM(mta_tax) AS revenue_monthly_mta_tax,
+    SUM(tip_amount) AS revenue_monthly_tip_amount,
+    SUM(tolls_amount) AS revenue_monthly_tolls_amount,
+    SUM(improvement_surcharge) AS revenue_monthly_improvement_surcharge,
+    SUM(total_amount) AS revenue_monthly_total_amount,
+    SUM(congestion_surcharge) AS revenue_monthly_congestion_surcharge,
+
+    -- Additional calculations
+    AVG(passenger_count) AS avg_montly_passenger_count,
+    AVG(trip_distance) AS avg_montly_trip_distance
+FROM
+    trips_data
+GROUP BY
+    1, 2, 3
+""")
+```
+
+
+
+
 
