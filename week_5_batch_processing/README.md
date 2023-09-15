@@ -1169,6 +1169,418 @@ GROUP BY
 """)
 ```
 
+#### Save the results
+
+The `coalesce()` is used to decrease the number of partitions in an efficient way.
+
+``` python
+df_result.coalesce(1).write.parquet('data/report/revenue/', mode='overwrite')
+```
+
+![p123](images/vm-jupyter-data-rev.png)
+
+## 5.4 Spark internals
+
+### 5.4.1 Anatomy of a Spark Cluster
+
+#### Spark Cluster
+
+**Spark Execution modes**: It is possible to run a spark application using **cluster mode**, **local mode**
+(pseudo-cluster) or with an **interactive** shell (*pypsark* or *spark-shell*).
+
+So far we’ve used a **local cluster** to run our Spark code, but Spark **clusters** often contain multiple computers
+that act as **executors**.
+
+Spark clusters are managed by a **master**, which behaves similarly to an entry point to a Kubernetes cluster. A
+**driver** (an Airflow DAG, a computer running a local script, etc.) who wants to run a Spark job will send the job to
+the master, who in turn will distribute the work among the **executors in the cluster**. If an executor fails and
+becomes offline for any reason, the master will reassign the task to another executor.
+
+Using cluster mode:
+
+- Spark applications are run as independent sets of processes, coordinated by a SparkContext object in your main program
+  (called the *driver program*).
+- The *context* connects to the cluster manager *which allocate resources*.
+- Each *worker* in the cluster is managed by an *executor*.
+- The *executor* manages computation as well as storage and caching on each machine.
+- The application code is sent from the *driver* to the executors, and the executors specify the context and the various
+  *tasks* to be run.
+- The *driver* program must listen for and accept incoming connections from its executors throughout its lifetime
+
+![p124](images/cluster.png)
+
+See [Cluster Mode Overview](https://spark.apache.org/docs/3.3.2/cluster-overview.html).
+
+![p125](images/spark-cluster.png)
+
+See [Spark Cluster Overview](https://events.prace-ri.eu/event/850/sessions/2616/attachments/955/1528/Spark_Cluster.pdf).
+
+#### Cluster and partitions
+
+To distribute work across the cluster and reduce the memory requirements of each node, Spark will split the data into
+smaller parts called Partitions. Each of these is then sent to an Executor to be processed. Only one partition is
+computed per executor thread at a time, therefore the size and quantity of partitions passed to an executor is directly
+proportional to the time it takes to complete.
+
+See [Apache Spark - Performance](https://blog.scottlogic.com/2018/03/22/apache-spark-performance.html) for more.
+
+#### Glossary
+
+The following table (from [this page](https://spark.apache.org/docs/3.3.2/cluster-overview.html)) summarizes terms
+you’ll see used to refer to cluster concepts:
+
+| **Term**  | **Meaning**   |
+|-----------------|----------------------------------------------------------------------|
+| Application  | User program built on Spark. Consists of a *driver program* and *executors* on the cluster. |
+| Application jar | A jar containing the user’s Spark application. In some cases users will want to create an "uber jar" containing their application along with its dependencies. The user’s jar should never include Hadoop or Spark libraries, however, these will be added at runtime. |
+| Driver program  | The process running the main() function of the application and creating the SparkContext.   |
+| Cluster manager | An external service for acquiring resources on the cluster (e.g. standalone manager, Mesos, YARN, Kubernetes).   |
+| Deploy mode  | Distinguishes where the driver process runs. In "cluster" mode, the framework launches the driver inside of the cluster. In "client" mode, the submitter launches the driver outside of the cluster. |
+| Worker node  | Any node that can run application code in the cluster.  |
+| Executor  | A process launched for an application on a worker node, that runs tasks and keeps data in memory or disk storage across them. Each application has its own executors.  |
+| Task   | A unit of work that will be sent to one executor. |
+| Job | A parallel computation consisting of multiple tasks that gets spawned in response to a Spark action (e.g. save, collect); you’ll see this term used in the driver’s logs. |
+| Stage  | Each job gets divided into smaller sets of tasks called stages that depend on each other (similar to the map and reduce stages in MapReduce); you’ll see this term used in the driver’s logs.  |
+
+### 5.4.2 GroupBy in Spark
+
+We will cover:
+
+- How GroupBy works internally
+- Shuffling
+
+#### Prepare the data
+
+In Jupyter, run the following script.
+
+``` python
+import pyspark
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .master("local[*]") \
+    .appName('test') \
+    .getOrCreate()
+
+df_green = spark.read.parquet('data/pq/green/*/*')
+df_green.createOrReplaceTempView("green")
+
+df_green_revenue = spark.sql("""
+SELECT
+    date_trunc('hour', lpep_pickup_datetime) AS hour,
+    PULocationID AS zone,
+
+    SUM(total_amount) AS amount,
+    COUNT(1) AS number_records
+FROM
+    green
+WHERE
+    lpep_pickup_datetime >= '2020-01-01 00:00:00'
+GROUP BY
+    1, 2
+""")
+
+# Materialized the result.
+df_green_revenue \
+    .repartition(20) \
+    .write.parquet('data/report/revenue/green', mode='overwrite')
+
+df_yellow = spark.read.parquet('data/pq/yellow/*/*')
+df_yellow.createOrReplaceTempView("yellow")
+
+df_yellow_revenue = spark.sql("""
+SELECT
+    date_trunc('hour', tpep_pickup_datetime) AS hour,
+    PULocationID AS zone,
+
+    SUM(total_amount) AS amount,
+    COUNT(1) AS number_records
+FROM
+    yellow
+WHERE
+    tpep_pickup_datetime >= '2020-01-01 00:00:00'
+GROUP BY
+    1, 2
+""")
+
+# Materialized the result.
+df_yellow_revenue \
+    .repartition(20) \
+    .write.parquet('data/report/revenue/yellow', mode='overwrite')
+```
+
+Run this code to see what the data looks like.
+
+``` python
+df_yellow_revenue.show(10)
+```
+
+![p126](images/vm-jupyter-groupby.png)
+
+#### What exactly Spark is doing
+
+This diagram shows how Spark works with multiple partitions and clusters to combine files.
+
+![p127](images/spark-partitions.png)
+
+Shuffling is a mechanism Spark uses to redistribute the data across different executors and even across machines.
+
+Shuffle is an expensive operation as it involves moving data across the nodes in your cluster, which involves network
+and disk I/O. It is always a good idea to reduce the amount of data that needs to be shuffled. Here are some tips to
+reduce shuffle:
+
+- Tune the `spark.sql.shuffle.partitions`.
+- Partition the input dataset appropriately so each task size is not too big.
+- Use the Spark UI to study the plan to look for opportunity to reduce the shuffle as much as possible.
+- Formula recommendation for `spark.sql.shuffle.partitions`:
+  - For large datasets, aim for anywhere from 100MB to less than 200MB task target size for a partition (use target size
+    of 100MB, for example).
+  - `spark.sql.shuffle.partitions` = quotient (shuffle stage input size/target size)/total cores) \* total cores.
+
+See [Explore best practices for Spark performance
+optimization](https://developer.ibm.com/blogs/spark-performance-optimization-guidelines/) for more information.
+
+### 5.4.3 Joins in Spark
+
+We will cover:
+
+- Joining two large tables
+- Merge sort join
+- Joining one large and one small table
+- Broadcasting
+
+#### Joining two large tables
+
+Spark can join two tables quite easily. The syntax is easy to understand.
+
+``` python
+df_green_revenue = spark.read.parquet('data/report/revenue/green')
+df_yellow_revenue = spark.read.parquet('data/report/revenue/yellow')
+
+df_green_revenue_tmp = df_green_revenue \
+    .withColumnRenamed('amount', 'green_amount') \
+    .withColumnRenamed('number_records', 'green_number_records')
+
+df_yellow_revenue_tmp = df_yellow_revenue \
+    .withColumnRenamed('amount', 'yellow_amount') \
+    .withColumnRenamed('number_records', 'yellow_number_records')
+
+df_join = df_green_revenue_tmp.join(df_yellow_revenue_tmp, on=['hour', 'zone'], how='outer')
+
+# Materialized the result.
+df_join.write.parquet('data/report/revenue/total', mode='overwrite')
+
+df_join.show(5)
+```
+
+We should see this.
+
+![p128](images/vm-jupyter-join.png)
+
+#### What exactly Spark is doing
+
+![p129](images/spark-join.png)
+
+#### Joining zones
+
+Read the result previously created.
+
+``` python
+>>> df_join = spark.read.parquet('data/report/revenue/total')
+>>> df_join.printSchema()
+root
+ |-- hour: timestamp (nullable = true)
+ |-- zone: integer (nullable = true)
+ |-- green_amount: double (nullable = true)
+ |-- green_number_records: long (nullable = true)
+ |-- yellow_amount: double (nullable = true)
+ |-- yellow_number_records: long (nullable = true)
+>>> df_join.show(5)
+```
+
+![p130](images/vm-jupyter-join-zones.png)
+
+Read the zones.
+
+``` python
+>>> !wget https://s3.amazonaws.com/nyc-tlc/misc/taxi+_zone_lookup.csv
+>>> df = spark.read.option("header", "true").csv('taxi+_zone_lookup.csv')
+>>> df.write.parquet('zones')
+>>> df_zones = spark.read.parquet('zones/')
+>>> df_zones.printSchema()
+root
+ |-- LocationID: string (nullable = true)
+ |-- Borough: string (nullable = true)
+ |-- Zone: string (nullable = true)
+ |-- service_zone: string (nullable = true)
+>>> df_zones.show(5)
+```
+
+![p131](images/vm-jupyter-zones.png)
+
+Join this two datasets and materialized the result.
+
+``` python
+df_result = df_join.join(df_zones, df_join.zone == df_zones.LocationID)
+df_result.drop('LocationID', 'zone').write.parquet('tmp/revenue-zones')
+```
+
+#### What exactly Spark is doing
+
+- Each executor processes a partition of Revenue DataFrame.
+- Zones DataFrame is a small table.
+- Because Zones is very small, each executor gets a copy of the entire Zones DataFrame and merges it with their
+  partition of Revenue DataFrame within memory.
+- Spark broadcast joins are perfect for joining a large DataFrame with a small DataFrame.
+  - Spark can "broadcast" a small DataFrame by sending all the data in that small DataFrame to all nodes in the cluster.
+  - After the small DataFrame is broadcasted, Spark can perform a join without shuffling any of the data in the large
+    DataFrame.
+- This is really (really!) fast.
+
+![p132](images/vm-jupyter-join-zones-describe.png)
+
+## 5.5 (Optional) Resilient Distributed Datasets
+
+### 5.5.1 Operations on Spark RDDs
+
+We will cover :
+
+- What is RDD and how is it related to dataframe
+- From DataFrame to RDD
+- Operators on RDDs: map, filter, reduceByKey
+- From RDD to DataFrame
+
+**Resilient Distributed Datasets** (RDDs) are the main abstraction provided by Spark and consist of collection of
+elements partitioned accross the nodes of the cluster.
+
+Dataframes are actually built on top of RDDs and contain a schema as well, which plain RDDs do not.
+
+#### Start Jupyter on remote machine
+
+First, start VM instance on Google Cloud. If needed, see the previous section called "Start VM instance on Google Cloud".
+
+Start Jupyter notebook on the cloud VM.
+
+``` bash
+> cd
+> cd data-engineering-zoomcamp/
+> cd week_5_batch_processing/
+> jupyter notebook
+```
+
+Copy and paste one of the URLs to the web browser.
+
+Make sure ports `8888` and `4040` are open. If not, see instructions in previous section.
+
+#### Create a new notebook
+
+In Jupyter, create a new notebook with the **Python 3 (ipykernel)** (or simply open `08_rdds.ipynb`).
+
+**File `08_rdds.ipynb`**
+
+``` python
+import pyspark
+from pyspark.sql import SparkSession
+
+spark = SparkSession.builder \
+    .master("local[*]") \
+    .appName('test') \
+    .getOrCreate()
+
+df_green = spark.read.parquet('data/pq/green/*/*')
+
+print(type(df_green.rdd.take(1)[0]))
+# <class 'pyspark.sql.types.Row'>
+
+df_green.rdd.take(3)
+```
+
+![p133](images/vm-jupyter-rdd.png)
+
+A `Row` is a special object `pyspark.sql.types.Row`.
+
+#### Implement a SQL query in RDD
+
+We want to implement this SQL query below but with RDD.
+
+``` sql
+SELECT
+    date_trunc('hour', lpep_pickup_datetime) AS hour,
+    PULocationID AS zone,
+
+    SUM(total_amount) AS amount,
+    COUNT(1) AS number_records
+FROM
+    green
+WHERE
+    lpep_pickup_datetime >= '2020-01-01 00:00:00'
+GROUP BY
+    1, 2
+```
+
+First, keep only columns that we need.
+
+``` python
+rdd = df_green \
+    .select('lpep_pickup_datetime', 'PULocationID', 'total_amount') \
+    .rdd
+
+rdd.take(5)
+```
+
+![p134](images/vm-jupyter-rdd1.png)
+
+#### Operations on RDDs: filter, map, reduceByKey, explode, toDF
+
+We will do five steps:
+
+- `.filter()` because we don’t want outliers
+- `.map()` to generate intermediate results better suited for aggregation
+- `.reduceByKey()` to merge the values for each key
+- `.explode()` to unwrap the rows
+- `.toDF()` to return the rows to a dataframe properly
+
+Next, we don’t want outliers and only need trips since January 1, 2020. So we create a filter.
+
+A filter returns a new RDD containing only the elements that satisfy a predicate.
+
+``` python
+# This returns the first row.
+>>> rdd.filter(lambda row: True).take(1)
+
+# This filters the while dataset and returns an empty list.
+>>> rdd.filter(lambda row: False).take(1)
+
+# This returns even numbers.
+# See https://spark.apache.org/docs/3.1.3/api/python/reference/api/pyspark.RDD.filter.html
+>>> rdd = sc.parallelize([1, 2, 3, 4, 5])
+>>> rdd.filter(lambda x: x % 2 == 0).collect()
+[2, 4]
+```
+
+We will use this to filter a Timestamp.
+
+``` python
+from datetime import datetime
+
+start = datetime(year=2020, month=1, day=1)
+
+rdd.filter(lambda row: riw.lpep_pickup_datetime >= start).take(5)
+
+# Better, because with lambda we gets messy quiet fast.
+def filter_outliers(row):
+    return row.lpep_pickup_datetime >= start
+
+rdd \
+    .filter(filter_outliers)\
+    .take(3)
+```
+
+
+
+
+
+
 
 
 
