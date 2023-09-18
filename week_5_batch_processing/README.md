@@ -2605,17 +2605,226 @@ We see in the logs that the job finished successfully.
 
 ![p155](images/dataproc-job-success3.png)
 
+In our bucket, we can see that the report is created successfully.
+
+#### Connecting Spark to Big Query
+
+We will cover :
+
+- Writing the spark job results to BigQuery
+
+This [link](https://cloud.google.com/dataproc/docs/tutorials/bigquery-connector-spark-example#pyspark) talks about
+connecting Spark to BigQuery. Here is the code appearing at this link.
+
+``` python
+#!/usr/bin/env python
+
+"""BigQuery I/O PySpark example."""
+
+from pyspark.sql import SparkSession
+
+spark = SparkSession \
+  .builder \
+  .master('yarn') \
+  .appName('spark-bigquery-demo') \
+  .getOrCreate()
+
+# Use the Cloud Storage bucket for temporary BigQuery export data used
+# by the connector.
+bucket = "[bucket]"
+spark.conf.set('temporaryGcsBucket', bucket)
+
+# Load data from BigQuery.
+words = spark.read.format('bigquery') \
+  .option('table', 'bigquery-public-data:samples.shakespeare') \
+  .load()
+words.createOrReplaceTempView('words')
+
+# Perform word count.
+word_count = spark.sql(
+    'SELECT word, SUM(word_count) AS word_count FROM words GROUP BY word')
+word_count.show()
+word_count.printSchema()
+
+# Saving the data to BigQuery
+word_count.write.format('bigquery') \
+  .option('table', 'wordcount_dataset.wordcount_output') \
+  .save()
+```
+
+Using the example code above as a template, we will modify our code. See
+[06_spark_sql_big_query.py](https://github.com/DataTalksClub/data-engineering-zoomcamp/blob/main/week_5_batch_processing/code/06_spark_sql_big_query.py)
+on the GitHub repo.
+
+First, we need to know the name of the buckets created by dataproc. Go to **Google Cloud**, **Cloud Storage**,
+**Buckets**. We see two buckets whose name begins with dataproc. We will use
+`dataproc-temp-asia-south1-779504185124-w9yvaynv`.
+
+![p156](images/dataproc-temp-bucket.png)
+
+So, I modify the script below accordingly.
+
+**File `06_spark_sql_big_query.py`**
+
+``` python
+#!/usr/bin/env python
+# coding: utf-8
+
+import argparse
+
+import pyspark
+from pyspark.sql import SparkSession
+from pyspark.sql import functions as F
+
+
+parser = argparse.ArgumentParser()
+
+parser.add_argument('--input_green', required=True)
+parser.add_argument('--input_yellow', required=True)
+parser.add_argument('--output', required=True)
+
+args = parser.parse_args()
+
+input_green = args.input_green
+input_yellow = args.input_yellow
+output = args.output
+
+spark = SparkSession.builder \
+    .appName('test') \
+    .getOrCreate()
+
+# First modification.
+# Use the Cloud Storage bucket for temporary BigQuery export data used
+# by the connector.
+bucket = "dataproc-temp-asia-south1-779504185124-w9yvaynv"
+spark.conf.set('temporaryGcsBucket', bucket)
+
+df_green = spark.read.parquet(input_green)
+
+df_green = df_green \
+    .withColumnRenamed('lpep_pickup_datetime', 'pickup_datetime') \
+    .withColumnRenamed('lpep_dropoff_datetime', 'dropoff_datetime')
+
+df_yellow = spark.read.parquet(input_yellow)
+
+
+df_yellow = df_yellow \
+    .withColumnRenamed('tpep_pickup_datetime', 'pickup_datetime') \
+    .withColumnRenamed('tpep_dropoff_datetime', 'dropoff_datetime')
+
+
+common_colums = [
+    'VendorID',
+    'pickup_datetime',
+    'dropoff_datetime',
+    'store_and_fwd_flag',
+    'RatecodeID',
+    'PULocationID',
+    'DOLocationID',
+    'passenger_count',
+    'trip_distance',
+    'fare_amount',
+    'extra',
+    'mta_tax',
+    'tip_amount',
+    'tolls_amount',
+    'improvement_surcharge',
+    'total_amount',
+    'payment_type',
+    'congestion_surcharge'
+]
 
 
 
+df_green_sel = df_green \
+    .select(common_colums) \
+    .withColumn('service_type', F.lit('green'))
+
+df_yellow_sel = df_yellow \
+    .select(common_colums) \
+    .withColumn('service_type', F.lit('yellow'))
 
 
+df_trips_data = df_green_sel.unionAll(df_yellow_sel)
+
+df_trips_data.registerTempTable('trips_data')
 
 
+df_result = spark.sql("""
+SELECT
+    -- Reveneue grouping
+    PULocationID AS revenue_zone,
+    date_trunc('month', pickup_datetime) AS revenue_month,
+    service_type,
 
+    -- Revenue calculation
+    SUM(fare_amount) AS revenue_monthly_fare,
+    SUM(extra) AS revenue_monthly_extra,
+    SUM(mta_tax) AS revenue_monthly_mta_tax,
+    SUM(tip_amount) AS revenue_monthly_tip_amount,
+    SUM(tolls_amount) AS revenue_monthly_tolls_amount,
+    SUM(improvement_surcharge) AS revenue_monthly_improvement_surcharge,
+    SUM(total_amount) AS revenue_monthly_total_amount,
+    SUM(congestion_surcharge) AS revenue_monthly_congestion_surcharge,
 
+    -- Additional calculations
+    AVG(passenger_count) AS avg_montly_passenger_count,
+    AVG(trip_distance) AS avg_montly_trip_distance
+FROM
+    trips_data
+GROUP BY
+    1, 2, 3
+""")
 
+# Second modification.
+# Saving the data to BigQuery
+df_result.write.format('bigquery') \
+    .option('table', output) \
+    .save()
+```
 
+We upload this script on Google Cloud Storage with the following command.
+
+``` bash
+gsutil cp 06_spark_sql_big_query.py gs://prefect-de-zoomcamp-hauct/code/06_spark_sql_big_query.py
+```
+
+Remember that we see `de-zoomcamp-nytaxi` in the video for BigQuery resource name. On my side, I have
+`ny-rides-alexey-396910` for BigQuery resource name.
+
+![p157](images/bq-database.png)
+
+The BigQuery schema we already have is `trips_data_all`.
+
+So, we slightly modify the script created previously to create the report in BigQuery by indicating the schema name for
+the report (`--output=trips_data_all.reports-2020`). We also need to specify the connector jar
+(`--jars=gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar`).
+
+``` bash
+gcloud dataproc jobs submit pyspark \
+    --cluster=de-zoomcamp-cluster \
+    --region=asia-south1 \
+    --jars=gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar \
+    gs://prefect-de-zoomcamp-hauct/code/06_spark_sql_big_query.py \
+    -- \
+        --input_green=gs://prefect-de-zoomcamp-hauct/pq/green/2020/*/ \
+        --input_yellow=gs://prefect-de-zoomcamp-hauct/pq/yellow/2020/*/ \
+        --output=trips_data_all.reports-2020
+```
+
+Run the `gcloud dataproc` command above on the VM instance and see what happens.
+
+Go to **BigQuery**, we should see the report `reports-2020` created under `trips_data_all`.
+
+![p158](images/bq-reports-2020.png)
+
+To make sure, just run this query.
+
+``` sql
+SELECT * FROM `ny-rides-alexey-396910.trips_data_all.reports-2020` LIMIT 10;
+```
+
+![p159](images/bq-reports-2020-2.png)
 
 
 
