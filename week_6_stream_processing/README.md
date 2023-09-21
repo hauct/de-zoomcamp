@@ -316,7 +316,7 @@ In the **New topic form**, enter :
 - Click on **Show advanced settings**
 - **Retention time**: 1 day
 
-![p168](images/confluent-new-topic.png)
+![p168](images/confluent-create-topic.png)
 
 Click on **Save & create** button.
 
