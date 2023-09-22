@@ -35,4 +35,4 @@ CONFLUENT_CLOUD_CONFIG = read_ccloud_config(CLIENT_PROPERTIES_FILE_PATH)
 """
 
 # Kafka topic
-TOPIC = 'nyc_rides'
+TOPIC = 'ksqlDB_cluster_0'
