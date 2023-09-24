@@ -420,6 +420,266 @@ We will cover :
 We will use Java for this. If we want to use Python, there’s a Docker image to help us.
 
 
+## 6.6 Streaming with python locally
+
+### 6.6.1 Setup environment
+
+We will install Kafka and Spark via Docker.
+
+To install and run Spark via Docker, change to dir `local/docker/spark`, there are several Dockerfile here, let's take a look of each files
+
+**File `cluster-base.Dockerfile`**
+
+```python
+# Reference from offical Apache Spark repository Dockerfile for Kubernetes
+# https://github.com/apache/spark/blob/master/resource-managers/kubernetes/docker/src/main/dockerfiles/spark/Dockerfile
+
+# Define an argument for the Java image tag, defaulting to "17-jre"
+ARG java_image_tag=17-jre
+
+# Use the specified Java image tag as the base image
+FROM eclipse-temurin:${java_image_tag}
+
+# -- Layer: OS + Python
+
+# Define an argument for the shared workspace directory, defaulting to "/opt/workspace"
+ARG shared_workspace=/opt/workspace
+
+# Create the specified shared workspace directory and perform several commands in a single RUN instruction
+RUN mkdir -p ${shared_workspace} && \
+    apt-get update -y && \
+    apt-get install -y python3 && \
+    ln -s /usr/bin/python3 /usr/bin/python && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set an environment variable SHARED_WORKSPACE to the value of the shared workspace directory
+ENV SHARED_WORKSPACE=${shared_workspace}
+
+# -- Runtime
+
+# Create a volume from the shared workspace directory
+VOLUME ${shared_workspace}
+
+# Define the default command to run when a container is started, in this case, it opens a bash shell
+CMD ["bash"]
+```
+
+This Dockerfile essentially does the following:
+
+1. Sets an argument `java_image_tag` with a default value of `17-jre`` to specify the Java image tag to be used.
+
+2. Uses the specified Java image (e.g., `eclipse-temurin:17-jre`) as the base image for the Docker container.
+
+3. Defines another argument shared_workspace with a default value of `/opt/workspace` to specify the shared workspace directory.
+
+4. Creates the specified shared workspace directory and performs a series of commands in a single RUN instruction. These commands include updating the package lists, installing Python 3, creating a symbolic link from `/usr/bin/python` to `/usr/bin/python3`, and cleaning up package lists to reduce image size.
+
+5. Sets an environment variable `SHARED_WORKSPACE` to the value of the shared workspace directory.
+
+6. Creates a Docker volume from the shared workspace directory, allowing data to be shared between the host and the container.
+
+7. Defines the default command to run when a container is started, which is to open a bash shell inside the container for interactive use.
+
+************************************
+
+**File `jupyterlab.Dockerfile`**
+
+```python
+# Use the "cluster-base" image as the base image
+FROM cluster-base
+
+# -- Layer: JupyterLab
+
+# Define arguments for Spark and JupyterLab versions, with default values
+ARG spark_version=3.3.1
+ARG jupyterlab_version=3.6.1
+
+# Update package lists and install Python 3 pip, then install specific versions of PySpark and JupyterLab
+RUN apt-get update -y && \
+    apt-get install -y python3-pip && \
+    pip3 install wget pyspark==${spark_version} jupyterlab==${jupyterlab_version}
+
+# -- Runtime
+
+# Expose port 8888 for JupyterLab
+EXPOSE 8888
+
+# Set the working directory to the shared workspace defined in the base image
+WORKDIR ${SHARED_WORKSPACE}
+
+# Define the default command to run when a container is started, which starts Jupyter Lab
+CMD jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token=
+```
+
+This Dockerfile extends the previous Dockerfile (referred to as `cluster-base`) and adds the following functionality:
+
+1. It uses the `cluster-base` image as the base image, which likely contains configurations and dependencies needed for Apache Spark and other components.
+
+2. It defines two arguments, `spark_version` and `jupyterlab_version`, with default values. These arguments allow you to specify the versions of `PySpark` and `JupyterLab` to be installed.
+
+3. Inside a `RUN` instruction, it updates the package lists, installs `Python 3` pip, and then uses pip to install specific versions of `PySpark` and `JupyterLab` based on the values of the previously defined arguments.
+
+4. It exposes port 8888 using the EXPOSE instruction, indicating that the container will listen on port 8888.
+
+5. It sets the working directory (WORKDIR) to the shared workspace directory, which was defined in the base image.
+
+6. Finally, it defines the default command to run when a container is started. This command starts Jupyter Lab, configuring it to listen on all network interfaces (`--ip=0.0.0.0`) on port 8888 (`--port=8888`), without opening a web browser (`--no-browser`), allowing root access (`--allow-root`), and without requiring a token for authentication (`--NotebookApp.token=`). This allows you to access Jupyter Lab from your host machine's web browser.
+
+************************************
+
+**File `spark-base.Dockerfile`**
+
+```python
+# Use the "cluster-base" image as the base image
+FROM cluster-base
+
+# -- Layer: Apache Spark
+
+# Define arguments for Spark and Hadoop versions, with default values
+ARG spark_version=3.3.1
+ARG hadoop_version=3
+
+# Update package lists, install curl, download and extract Apache Spark, move it to /usr/bin/,
+# create a logs directory, and then remove the downloaded archive
+RUN apt-get update -y && \
+    apt-get install -y curl && \
+    curl https://archive.apache.org/dist/spark/spark-${spark_version}/spark-${spark_version}-bin-hadoop${hadoop_version}.tgz -o spark.tgz && \
+    tar -xf spark.tgz && \
+    mv spark-${spark_version}-bin-hadoop${hadoop_version} /usr/bin/ && \
+    mkdir /usr/bin/spark-${spark_version}-bin-hadoop${hadoop_version}/logs && \
+    rm spark.tgz
+
+# Set environment variables for Spark, including SPARK_HOME, SPARK_MASTER_HOST, SPARK_MASTER_PORT, and PYSPARK_PYTHON
+ENV SPARK_HOME /usr/bin/spark-${spark_version}-bin-hadoop${hadoop_version}
+ENV SPARK_MASTER_HOST spark-master
+ENV SPARK_MASTER_PORT 7077
+ENV PYSPARK_PYTHON python3
+
+# -- Runtime
+
+# Set the working directory to the Spark home directory
+WORKDIR ${SPARK_HOME}
+```
+
+This Dockerfile does the following:
+
+1. It uses the `cluster-base` image as the base image.
+
+2. It defines two arguments, `spark_version` and `hadoop_version`, with default values. These arguments allow you to specify the versions of Apache Spark and Hadoop to be installed.
+
+3. Inside a RUN instruction, it performs several tasks:
+
+ - Updates package lists using apt-get.
+ - Installs the curl package, which is a command-line tool for transferring data.
+ - Downloads the Apache Spark distribution for the specified versions using curl and saves it as spark.tgz.
+ - Extracts the contents of spark.tgz.
+ - Moves the extracted Spark directory to /usr/bin/.
+ - Creates a logs directory inside the Spark directory.
+ - Removes the downloaded spark.tgz archive to save space.
+
+4. It sets several environment variables related to Spark, including SPARK_HOME, SPARK_MASTER_HOST, SPARK_MASTER_PORT, and PYSPARK_PYTHON.
+
+6. Finally, it sets the working directory (WORKDIR) to the Spark home directory, which is where Spark will be located within the container.
+
+************************************
+
+**File `spark-master.Dockerfile`**
+
+```python
+# Use the "spark-base" image as the base image
+FROM spark-base
+
+# -- Runtime
+
+# Define an argument for the Spark Master web UI port, with a default value of 8080
+ARG spark_master_web_ui=8080
+
+# Expose the ports specified by the Spark Master web UI port and SPARK_MASTER_PORT environment variable
+EXPOSE ${spark_master_web_ui} ${SPARK_MASTER_PORT}
+
+# Define the default command to run when a container is started, which starts the Spark Master
+CMD bin/spark-class org.apache.spark.deploy.master.Master >> logs/spark-master.out
+```
+
+This Dockerfile does the following:
+
+1. It uses the `spark-base` image as the base image.
+
+2. Inside the `Runtime` section:
+
+ - It defines an argument spark_master_web_ui for specifying the port of the Spark Master web UI, with a default value of `8080`.
+
+ - It uses the `EXPOSE` instruction to expose two ports:
+
+   - `${spark_master_web_ui}`: This is the port specified by the spark_master_web_ui argument, which is the port for the Spark Master web UI.
+  
+   - `${SPARK_MASTER_PORT}`: This is a dynamic port specified by the SPARK_MASTER_PORT environment variable. The actual port number will be determined at runtime.
+
+ - It defines the default command to run when a container is started. This command starts the Spark Master using the spark-class script and directs the output to a log file (`logs/spark-master.out`). This command essentially starts the Spark Master and captures its logs.
+
+************************************
+
+**File `spark-worker.Dockerfile`**
+
+```python
+# Use the "spark-base" image as the base image
+FROM spark-base
+
+# -- Runtime
+
+# Define an argument for the Spark Worker web UI port, with a default value of 8081
+ARG spark_worker_web_ui=8081
+
+# Expose the port specified by the Spark Worker web UI port
+EXPOSE ${spark_worker_web_ui}
+
+# Define the default command to run when a container is started, which starts the Spark Worker
+CMD bin/spark-class org.apache.spark.deploy.worker.Worker spark://${SPARK_MASTER_HOST}:${SPARK_MASTER_PORT} >> logs/spark-worker.out
+```
+
+This Dockerfile does the following:
+
+1. It uses the `spark-base` image as the base image.
+
+2. Inside the `Runtime` section:
+
+  - It defines an argument `spark_worker_web_ui` for specifying the port of the Spark Worker web UI, with a default value of 8081.
+
+  - It uses the `EXPOSE` instruction to expose the port specified by the spark_worker_web_ui argument. This indicates that the Spark Worker web UI port should be made accessible from outside the container.
+
+3. It defines the default command to run when a container is started. This command starts the Spark Worker using the spark-class script and specifies the Spark Master's address using the `${SPARK_MASTER_HOST}` and `${SPARK_MASTER_PORT}` environment variables. The output of the Spark Worker is redirected to a log file (`logs/spark-worker.out`) for monitoring and troubleshooting purposes.
+
+************************************
+
+Open your Docker Desktop, if you don't have it, download it  [here] (https://desktop.docker.com/win/main/amd64/Docker%20Desktop%20Installer.exe?utm_source=docker&utm_medium=webreferral&utm_campaign=dd-smartbutton&utm_location=module&_gl=1*afadrk*_ga*MTgwMjMyMjU4Ni4xNjkwMDM0NTg4*_ga_XJWPQMJYHQ*MTY5NTU3NzMyMC4yMC4xLjE2OTU1NzczMjMuNTcuMC4w).
+
+Before we build and run Spark images, we need to create a network and volume to connect Spark and Kafka. You can read more [here](https://medium.com/m/global-identity-2?redirectUrl=https%3A%2F%2Faws.plainenglish.io%2Fultimate-guide-to-docker-volumes-and-networks-sharing-files-and-data-between-containers-eb7600fe0f6c#:~:text=Docker%2DVolume%20is%20a%20feature,stored%20inside%20the%20container%20itself.).
+
+Open your terminal and run
+
+```bash
+# Create Network
+docker network  create kafka-spark-network
+
+# Create Volume
+docker volume create --name=hadoop-distributed-file-system
+```
+
+In our now working dir `local/docker/spark` we run the script below to build all the necessary images of Spark.
+
+```bash
+./build.sh
+```
+
+And then run
+
+```bash
+docker compose up -d
+```
+
+### 6.6.1 Json Producer-Consumer Example
+
+
 
 
 

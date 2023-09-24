@@ -1,0 +1,7 @@
+confluent_kafka
+jsonschema
+requests
+avro
+fastavro
+kafka-python==1.4.6
+pyspark==3.3.1
