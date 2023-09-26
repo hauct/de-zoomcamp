@@ -846,6 +846,136 @@ docker compose up -d
 **Note**: You can run the `docker-compose.yml` in the directory `local/docker/` to run the container that include Spark and Kafka, instead of running individually `docker-compose.yml` on `kafka` and `spark` folder.
 Remember before you run this, run the script `./build.sh` on `local/docker/spark` to build the image
 
-### 6.6.2 Setup ultils and setting file
+### 6.6.2 Setup utils and setting file
+
+#### 6.6.2.1 Create utils file
+
+Before pushing data as a CSV file into Kafka, we need to transform the data format into a dictionary for each row. Here, I'm using a technique to create a class called `Ride` to represent our data. This class will take a list as input, where each list represents a row in the CSV file, and convert them into a data structure like a dictionary.
+
+You can find more details in the following file.
+
+**File `ride.py`**
+
+```python
+from typing import List, Dict
+from decimal import Decimal
+from datetime import datetime
+
+# Define the Ride class
+class Ride:
+    # Initialize a Ride object from a list of input values
+    def __init__(self, arr: List[str]):
+        self.vendor_id = int(arr[0])  # Vendor ID
+        self.tpep_pickup_datetime = datetime.strptime(arr[1], "%Y-%m-%d %H:%M:%S")  # Pickup datetime
+        self.tpep_dropoff_datetime = datetime.strptime(arr[2], "%Y-%m-%d %H:%M:%S")  # Dropoff datetime
+        self.passenger_count = int(arr[3])  # Passenger count
+        self.trip_distance = Decimal(arr[4])  # Trip distance
+        self.rate_code_id = int(arr[5])  # Rate code ID
+        self.store_and_fwd_flag = arr[6]  # Store and forward flag
+        self.pu_location_id = int(arr[7])  # Pickup location ID
+        self.do_location_id = int(arr[8])  # Dropoff location ID
+        self.payment_type = arr[9]  # Payment type
+        self.fare_amount = Decimal(arr[10])  # Fare amount
+        self.extra = Decimal(arr[11])  # Extra charges
+        self.mta_tax = Decimal(arr[12])  # MTA tax
+        self.tip_amount = Decimal(arr[13])  # Tip amount
+        self.tolls_amount = Decimal(arr[14])  # Tolls amount
+        self.improvement_surcharge = Decimal(arr[15])  # Improvement surcharge
+        self.total_amount = Decimal(arr[16])  # Total amount
+        self.congestion_surcharge = Decimal(arr[17])  # Congestion surcharge
+
+    # Class method to create a Ride object from a dictionary
+    @classmethod
+    def from_dict(cls, d: Dict):
+        return cls(arr=[
+            d['vendor_id'],
+            d['tpep_pickup_datetime'],
+            d['tpep_dropoff_datetime'],
+            d['passenger_count'],
+            d['trip_distance'],
+            d['rate_code_id'],
+            d['store_and_fwd_flag'],
+            d['pu_location_id'],
+            d['do_location_id'],
+            d['payment_type'],
+            d['fare_amount'],
+            d['extra'],
+            d['mta_tax'],
+            d['tip_amount'],
+            d['tolls_amount'],
+            d['improvement_surcharge'],
+            d['total_amount'],
+            d['congestion_surcharge'],
+        ])
+        
+    # Method to represent the object as a string
+    def __repr__(self):
+        return f'{self.__class__.__name__}: {self.__dict__}'
+
+# Function ride_to_dict to convert a Ride object to a dictionary
+def ride_to_dict(ride: Ride, ctx):
+    return ride.__dict__
+```
+
+I design a `utils.py` file to handle reading a CSV file, processing its data, and converting it into a list of `Ride` objects.
+
+**File `utils.py`**
+
+```python
+import csv
+from typing import List
+from ride import Ride  
+import os
+
+# Define the path to the CSV file
+CURRENT_FILE_PATH = os.getcwd()
+INPUT_DATA_PATH = os.path.join(CURRENT_FILE_PATH, 'resources', 'data', 'rides.csv')
+
+# Function to read and parse ride data from a CSV file
+def read_rides(resource_path: str = INPUT_DATA_PATH) -> List[Ride]:
+    rides = []  # Create an empty list to store Ride objects
+    with open(resource_path, 'r') as f:
+        reader = csv.reader(f)  # Create a CSV reader for the file
+        header = next(reader)  # Skip the header row (assuming it contains column names)
+        for row in reader:  # Iterate over each row in the CSV file
+            rides.append(Ride(arr=row))  # Create a Ride object from the row and add it to the list
+    return rides  # Return the list of Ride objects
+```
+
+#### 6.6.2.2 Create setting file
+
+After we have prepared the data, we configure the parameters for the Kafka Producer and Consumer, specifically in the following code file.
+
+**File `setting.py`**
+
+```python
+import json
+from ride import Ride
+
+# Kafka server configuration
+BOOTSTRAP_SERVERS = ['localhost:9092']
+
+# Kafka topic for sending and receiving JSON data
+TOPIC = 'rides_json'
+
+# Configuration for Kafka producer
+PRODUCER_CONFIG = {
+    'bootstrap_servers': BOOTSTRAP_SERVERS,
+    'key_serializer': lambda key: str(key).encode(),
+    'value_serializer': lambda value: json.dumps(value.__dict__, default=str).encode('utf-8')
+}
+
+# Configuration for Kafka consumer
+CONSUMER_CONFIG = {
+    'bootstrap_servers': BOOTSTRAP_SERVERS,
+    'auto_offset_reset': 'earliest',
+    'enable_auto_commit': True,
+    'key_deserializer': lambda key: int(key.decode('utf-8')),
+    'value_deserializer': lambda value: json.loads(value.decode('utf-8'), object_hook=lambda d: Ride.from_dict(d)),
+    'group_id': 'simple.kafka.json.example',
+}
+```
+
+### 6.6.3 Setup Producer and Consumer
 
 
