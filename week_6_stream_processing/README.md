@@ -846,6 +846,275 @@ docker compose up -d
 **Note**: You can run the `docker-compose.yml` in the directory `local/docker/` to run the container that include Spark and Kafka, instead of running individually `docker-compose.yml` on `kafka` and `spark` folder.
 Remember before you run this, run the script `./build.sh` on `local/docker/spark` to build the image
 
+### 6.6.2 Setup Producer and Consumer
+
+Kafka Producer and Kafka Consumer are two crucial components in the Apache Kafka system, a distributed stream processing platform. Both Producer and Consumer are related to transmitting and receiving data from Kafka topics. Below, we'll explain the significance of each approach (Simple, JSON, Avro) when using Kafka Producer and Kafka Consumer, along with the pros and cons of each method:
+
+1. `Simple Example`: 
+ - **Significance**: 
+   - A Kafka Producer in the Simple example is an application or script that reads data from some source and sends it to one or more Kafka topics without needing a specific data format. Data is typically sent as plain text.
+   - A Kafka Consumer in the Simple example is also an application or script that reads data from a Kafka topic and processes it without prior knowledge of the data format.
+
+ - **Pros**:
+    - Simplicity and ease of deployment: Creating Kafka Producers and Consumers using available Kafka libraries is straightforward.
+    - Quick integration: Can be used to integrate existing applications into Kafka.
+
+ - **Cons**:
+    - Data loss potential: Data is sent and received as plain text, without format checking or full validation, which can lead to data loss or inaccurate processing if data formats are not controlled.
+
+ - **Example**:
+    - You have a simple logging system, and you want to send log entries to Kafka for monitoring. The log data is not complex, and you only need to ensure it gets sent to Kafka for storage or future processing.
+
+2. `JSON Example (object example)`:
+ - **Significance**:
+   - In this case, the Kafka Producer sends data in JSON (JavaScript Object Notation) format. Each record or message is encapsulated in a JSON structure, making the data's structure clear.
+   - The Kafka Consumer knows that the received data will be in JSON format and can easily parse it into objects within the application.
+
+ - **Pros**:
+   - Clear data structure: Using JSON provides a well-defined and readable data format, ensuring consistency in data transmission and processing.
+   - Scalability: JSON is suitable for applications with dynamic and flexible data structures.
+
+ - **Cons**:
+   - JSON parser: Requires a robust JSON parser for data handling, which can introduce some overhead in data processing compared to simple text formats.
+
+ - **Example**:
+   - You have an application sending user registration information to Kafka for storage and processing. User data has a clear structure, and you want to ensure consistency in data transmission and processing.
+
+3.  `Avro Example`:
+ - **Significance**:
+   - Avro is a binary data format with a structured schema. In this example, the Kafka Producer sends data in Avro format, and the Kafka Consumer understands the data's structure by using an Avro Schema.
+   - The Avro Schema defines the data's structure and is used for serializing and deserializing data.
+
+ - **Pros**:
+   - High performance: Avro data is often smaller in size than JSON or text, reducing network and storage overhead.
+   - Format validation: Avro Schema ensures data consistency and format validation.
+
+ - **Cons**:
+   - Complexity: Using Avro requires defining and managing Avro Schemas, which can be more complex than JSON for some individuals.
+
+ - **Example**:
+   - You have a sensor data monitoring system, and you want to send sensor data to Kafka. Sensor data has a predefined structure, and you need to validate the data format to ensure consistency and accuracy.
+
+**Note**: before begining the session, you will need to make sure starting Kafka and PySpark via Docker Desktop. In your terminal, run `docker ps` to show all container running
+
+```bash
+$ docker ps
+CONTAINER ID   IMAGE                                             COMMAND                  CREATED        STATUS        PORTS
+                      NAMES
+8eec80ef705c   spark-worker                                      "/__cacert_entrypoin…"   28 hours ago   Up 28 hours   0.0.0.0:8084->8081/tcp     
+                      spark-worker-2
+6baaa746fa33   spark-worker                                      "/__cacert_entrypoin…"   28 hours ago   Up 28 hours   0.0.0.0:8083->8081/tcp     
+                      spark-worker-1
+7822ce340e52   spark-master                                      "/__cacert_entrypoin…"   28 hours ago   Up 28 hours   0.0.0.0:7077->7077/tcp, 0.0.0.0:8080->8080/tcp   spark-master
+2acb81c7198e   jupyterlab                                        "/__cacert_entrypoin…"   28 hours ago   Up 28 hours   0.0.0.0:8888->8888/tcp     
+                      jupyterlab
+b4068d360f25   confluentinc/cp-kafka-rest:7.2.0                  "/etc/confluent/dock…"   28 hours ago   Up 28 hours   0.0.0.0:8082->8082/tcp     
+                      kafka-kafka-rest-1
+9205ec484ed1   confluentinc/cp-enterprise-control-center:7.2.0   "/etc/confluent/dock…"   28 hours ago   Up 28 hours   0.0.0.0:9021->9021/tcp     
+                      control-center
+dc1f72168ab1   confluentinc/cp-schema-registry:7.2.0             "/etc/confluent/dock…"   28 hours ago   Up 28 hours   0.0.0.0:8081->8081/tcp     
+                      schema-registry
+5c3ff7459d4f   confluentinc/cp-kafka:7.2.0                       "/etc/confluent/dock…"   28 hours ago   Up 28 hours   0.0.0.0:9092->9092/tcp     
+                      broker
+9d57702e86a6   confluentinc/cp-zookeeper:7.2.0                   "/etc/confluent/dock…"   28 hours ago   Up 28 hours   2888/tcp, 0.0.0.0:2181->2181/tcp, 3888/tcp       zookeeper
+```
+
+#### 6.6.2.1 Simple Example
+
+Change to `./local/src/simple_example` directory
+
+##### 6.6.2.1.1 Create utils file
+
+Before pushing data as a CSV file into Kafka, we need to transform the data format into a dictionary for each row. Take a look at this file
+
+**File `utils.py`**
+
+```python 
+import csv
+from typing import List
+
+# Define the path to the CSV file
+CURRENT_FILE_PATH = os.getcwd()
+SRC_DIR = os.path.dirname(CURRENT_FILE_PATH)
+LOCAL_DIR = os.path.dirname(SRC_DIR)
+INPUT_DATA_PATH = os.path.join(LOCAL_DIR, 'resources', 'data', 'rides.csv')
+
+# Function to read and parse ride data from a CSV file
+def read_csv(resource_path: str = INPUT_DATA_PATH) -> List[str]:
+    records = [] # Create an empty list to store row
+    with open(resource_path, 'r') as f:
+        reader = csv.reader(f) # Create a CSV reader for the file
+        header = next(reader)  # skip the header
+        for row in reader:  # Iterate over each row in the CSV file
+            records.append(', '.join(row)) # Add string
+        return records  # Return the list of string
+```
+
+#### 6.6.2.1.2 Create setting file
+
+After we have prepared the data, we configure the parameters for the Kafka Producer and Consumer, specifically in the following code file.
+
+**File `settings.py`**
+
+```python
+# Define the Kafka server(s) that the producer and consumer will connect to
+BOOTSTRAP_SERVERS = ['localhost:9092']
+
+# Define the Kafka topic that the producer and consumer will work with
+TOPIC = 'rides_csv'
+
+# Configuration settings for the Kafka producer
+PRODUCER_CONFIG = {
+    'bootstrap_servers': BOOTSTRAP_SERVERS,  # List of Kafka broker(s) to connect to
+    'key_serializer': lambda key: key.encode('utf-8'),  # Serializer for message keys
+    'value_serializer': lambda value: value.encode('utf-8')  # Serializer for message values
+}
+
+# Configuration settings for the Kafka consumer
+CONSUMER_CONFIG = {
+    'bootstrap_servers': BOOTSTRAP_SERVERS,  # List of Kafka broker(s) to connect to
+    'auto_offset_reset': 'earliest',  # Set the offset to the earliest available message when the consumer starts
+    'enable_auto_commit': True,  # Enable automatic offset committing by the consumer
+    'key_deserializer': lambda key: int(key.decode('utf-8')),  # Deserializer for message keys
+    'value_deserializer': lambda value: value.decode('utf-8'),  # Deserializer for message values
+    'group_id': 'consumer.group.id.csv-example'  # Unique identifier for the consumer group
+}
+```
+
+#### 6.6.2.1.2 Create Producer file
+
+We will create a code file that publish messages to a Kafka topic. You can read more about [Producer in Kafka](https://kafka-python.readthedocs.io/en/master/apidoc/KafkaProducer.html) here
+
+**File `producer.py`**
+
+```python
+# Import necessary modules
+from typing import List, Dict
+from kafka import KafkaProducer
+from kafka.errors import KafkaTimeoutError
+
+# Import configurations and utility functions from external modules
+from settings import PRODUCER_CONFIG, TOPIC
+from utils import read_csv
+
+# Define a custom Kafka producer class that inherits from KafkaProducer
+class SimpleProducer(KafkaProducer):
+    def __init__(self, props: Dict):
+        # Initialize the KafkaProducer with the provided properties
+        self.kafka_producer = KafkaProducer(**props)
+
+    def publish_messages(self, topic: str, messages: List[str]):
+        # Iterate over the list of messages to be published
+        for message in messages:
+            try:
+                # Send a message to the specified Kafka topic
+                record = self.kafka_producer.send(key=message[0], value=message, topic=topic)
+                # Print a success message with the produced message and its offset
+                print('Record:{} successfully produced at offset:{}'
+                      .format(message, record.get().offset))
+            except KafkaTimeoutError as e:
+                # Handle KafkaTimeoutError by printing an error message
+                print(e.__str__())
+
+# Entry point of the script
+if __name__ == '__main__':
+    # Read CSV data from the 'read_csv' utility function
+    rides = read_csv()
+
+    # Create an instance of the SimpleProducer class with the provided producer configuration
+    producer = SimpleProducer(props=PRODUCER_CONFIG)
+    
+    # Publish the read CSV data as messages to the specified Kafka topic
+    producer.publish_messages(topic=TOPIC, messages=rides)
+```
+
+In your terminal, run this script below
+
+```bash
+python producer.py
+```
+
+You will see the messages have been sent
+
+``` bash
+Record:1, 2020-07-01 00:25:32, 2020-07-01 00:33:39, 1, 1.50, 1, N, 238, 75, 2, 8, 0.5, 0.5, 0, 0, 0.3, 9.3, 0 successfully produced at offset:1064
+Record:1, 2020-07-01 00:03:19, 2020-07-01 00:25:43, 1, 9.50, 1, N, 138, 216, 1, 26.5, 0.5, 0.5, 0, 0, 0.3, 27.8, 0 successfully produced at 
+offset:1065
+Record:2, 2020-07-01 00:15:11, 2020-07-01 00:29:24, 1, 5.85, 1, N, 230, 88, 2, 18.5, 0.5, 0.5, 0, 0, 0.3, 22.3, 2.5 successfully produced at offset:1066
+Record:2, 2020-07-01 00:30:49, 2020-07-01 00:38:26, 1, 1.90, 1, N, 88, 232, 1, 8, 0.5, 0.5, 2.36, 0, 0.3, 14.16, 2.5 successfully produced at offset:1067
+```
+
+#### 6.6.2.1.2 Create Consumer file
+
+This Python code is a simple application for consuming data from a Kafka topic using the KafkaConsumer library from the kafka-python library. You can read more about [Consumer in Kafka](https://kafka-python.readthedocs.io/en/master/apidoc/KafkaConsumer.html)
+
+**File `consumer.py`**
+
+```python
+import argparse
+from typing import Dict, List
+from kafka import KafkaConsumer
+
+# Import configurations and topic from external module
+from settings import CONSUMER_CONFIG, TOPIC
+
+# Define a SimpleConsumer class for Kafka data consumption
+class SimpleConsumer:
+    def __init__(self, props: Dict):
+        # Initialize a KafkaConsumer instance with provided properties
+        self.consumer = KafkaConsumer(**props)
+
+    def consume_from_topics(self, topics: List[str]):
+        # Subscribe to the specified Kafka topics
+        self.consumer.subscribe(topics)
+        print('Consuming from Kafka started')
+        print('Available topics to consume: ', self.consumer.subscription())
+        while True:
+            try:
+                # Poll for new Kafka messages with a timeout of 1 second
+                state = self.consumer.poll(1.0)  # dict{topic1 = [()], topic2=[(),]}
+                if state is None or state == {}:
+                    continue
+                for topic, records in state.items():
+                    for record in records:
+                        # Print the key, value, and topic of each Kafka record
+                        print(f'Key: {record.key} || Value:{record.value} || {topic}')
+            except KeyboardInterrupt:
+                break
+        # Close the KafkaConsumer when finished
+        self.consumer.close()
+
+if __name__ == '__main__':
+    # Create an instance of SimpleConsumer with consumer configuration
+    simple_consumer = SimpleConsumer(props=CONSUMER_CONFIG)
+    
+    # Consume data from the specified Kafka topic
+    simple_consumer.consume_from_topics(topics=[TOPIC])
+```
+
+In your terminal, run this script below
+
+```bash
+python consumer.py
+```
+
+You will see the messages have been consumed
+```bash
+Key: 1 || Value:1, 2020-07-01 00:04:39, 2020-07-01 00:13:28, 1, .00, 1, N, 236, 170, 1, 9.2, 3, 0.5, 2.6, 0, 0.3, 15.6, 2.5 || TopicPartition(topic='rides_csv', partition=0)
+Key: 1 || Value:1, 2020-07-01 00:17:43, 2020-07-01 00:32:35, 1, 8.60, 1, N, 233, 212, 1, 25, 3, 0.5, 5.75, 0, 0.3, 34.55, 2.5 || TopicPartition(topic='rides_csv', partition=0)
+Key: 1 || Value:1, 2020-07-01 00:51:58, 2020-07-01 00:55:37, 1, 1.50, 1, N, 229, 137, 1, 6, 3, 0.5, 1.96, 0, 0.3, 11.76, 2.5 || TopicPartition(topic='rides_csv', partition=0)
+Key: 2 || Value:2, 2020-07-01 00:19:11, 2020-07-01 00:24:01, 3, 1.44, 1, N, 186, 50, 1, 6, 0.5, 0.5, 2.94, 0, 0.3, 12.74, 2.5 || TopicPartition(topic='rides_csv', partition=0)
+```
+
+##### 6.6.2.1.1 Open Jupyterlab CLI in Docker to do Pyspark streaming
+
+The provided Python code is a Spark Structured Streaming application that reads data from a Kafka topic, processes it, and writes the results to various destinations (console, memory, and Kafka)
+
+
+
+
+
+
 ### 6.6.2 Setup utils and setting file
 
 #### 6.6.2.1 Create utils file
@@ -977,5 +1246,6 @@ CONSUMER_CONFIG = {
 ```
 
 ### 6.6.3 Setup Producer and Consumer
-
+Befor 
+####
 
