@@ -1106,13 +1106,190 @@ Key: 1 || Value:1, 2020-07-01 00:51:58, 2020-07-01 00:55:37, 1, 1.50, 1, N, 229,
 Key: 2 || Value:2, 2020-07-01 00:19:11, 2020-07-01 00:24:01, 3, 1.44, 1, N, 186, 50, 1, 6, 0.5, 0.5, 2.94, 0, 0.3, 12.74, 2.5 || TopicPartition(topic='rides_csv', partition=0)
 ```
 
+Or, you can check in your Confluent (on Docker), click on this port on your Docker Desktop, go to this button to view the earliest messages consumed to the topic
+
+<table>
+<tr><td>
+<img src="images/confluent-docker-port.png">
+</td><td>
+<img src="images/confluent-docker-topic-messages.png">
+</td></tr>
+</table>
+
 ##### 6.6.2.1.1 Open Jupyterlab CLI in Docker to do Pyspark streaming
 
-The provided Python code is a Spark Structured Streaming application that reads data from a Kafka topic, processes it, and writes the results to various destinations (console, memory, and Kafka)
+In your Docker Desktop, click on this port to open Jupyterlab on your PC
 
+![177](images/docker-jupyterlab.png)
 
+The provided Python code below is a Spark Structured Streaming application that reads data from a Kafka topic, processes it, and writes the results to various destinations (console, memory, and Kafka), which contains some parts:
 
+```python
+# Import necessary Spark and PySpark modules
+from pyspark.sql import SparkSession
+import pyspark.sql.functions as F
 
+# Import configurations and schemas from external modules
+from settings import RIDE_SCHEMA, CONSUME_TOPIC_RIDES_CSV, TOPIC_WINDOWED_VENDOR_ID_COUNT
+```
+
+The code starts with importing necessary modules and configurations from external files.
+
+```python
+def read_from_kafka(consume_topic: str):
+    # Create a Spark Streaming DataFrame, connect to Kafka topic served at the host specified in bootstrap.servers option
+    df_stream = spark \
+        .readStream \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", "localhost:9092,broker:29092") \
+        .option("subscribe", consume_topic) \
+        .option("startingOffsets", "earliest") \
+        .option("checkpointLocation", "checkpoint") \
+        .load()
+    return df_stream
+```
+
+This function sets up a Spark Structured Streaming DataFrame to read data from a Kafka topic. It configures the Kafka server, the topic to subscribe to, starting offsets, and checkpoint location for fault tolerance.
+
+```python
+def parse_ride_from_kafka_message(df, schema):
+    """Take a Spark Streaming df and parse the value column based on <schema>, return streaming df columns in the specified schema."""
+    assert df.isStreaming is True, "DataFrame doesn't receive streaming data"
+
+    df = df.selectExpr("CAST(key AS STRING)", "CAST(value AS STRING)")
+
+    # Split attributes into a nested array in one Column
+    col = F.split(df['value'], ', ')
+
+    # Expand col to multiple top-level columns based on the provided schema
+    for idx, field in enumerate(schema):
+        df = df.withColumn(field.name, col.getItem(idx).cast(field.dataType))
+    return df.select([field.name for field in schema])
+```
+
+This function takes a Spark Structured Streaming DataFrame and parses the "value" column based on a provided schema, which is used to split and cast the data correctly. It ensures that the DataFrame is receiving streaming data.
+
+```python
+def sink_console(df, output_mode: str = 'complete', processing_time: str = '5 seconds'):
+    # Configure a console sink to display the DataFrame's content
+    write_query = df.writeStream \
+        .outputMode(output_mode) \
+        .trigger(processingTime=processing_time) \
+        .format("console") \
+        .option("truncate", False) \
+        .start()
+    return write_query  # pyspark.sql.streaming.StreamingQuery
+```
+
+This function configures a console sink to display the contents of the DataFrame in real-time. It specifies the output mode (complete or append) and the processing time interval for displaying updates.
+
+```python
+def sink_memory(df, query_name, query_template):
+    # Configure a memory sink to store the DataFrame's content in memory
+    query_df = df \
+        .writeStream \
+        .queryName(query_name) \
+        .format("memory") \
+        .start()
+    query_str = query_template.format(table_name=query_name)
+    query_results = spark.sql(query_str)
+    return query_results, query_df
+```
+
+This function configures a memory sink to store the DataFrame's content in memory for querying purposes. It specifies a query name and template for querying the memory sink.
+
+```python
+def sink_kafka(df, topic):
+    # Configure a Kafka sink to write the DataFrame's content to a Kafka topic
+    write_query = df.writeStream \
+        .format("kafka") \
+        .option("kafka.bootstrap.servers", "localhost:9092,broker:29092") \
+        .outputMode('complete') \
+        .option("topic", topic) \
+        .option("checkpointLocation", "checkpoint") \
+        .start()
+    return write_query
+```
+
+This function configures a Kafka sink to write the DataFrame's content to a specified Kafka topic. It specifies the Kafka server, output mode (complete), topic, and checkpoint location.
+
+``` python
+def prepare_df_to_kafka_sink(df, value_columns, key_column=None):
+    # Prepare the DataFrame for writing to a Kafka sink
+    columns = df.columns
+
+    df = df.withColumn("value", F.concat_ws(', ', *value_columns))
+    if key_column:
+        df = df.withColumnRenamed(key_column, "key")
+        df = df.withColumn("key", df.key.cast('string'))
+    return df.select(['key', 'value'])
+```
+This function prepares the DataFrame for writing to a Kafka sink by formatting the "key" and "value" columns based on provided value columns and optionally renaming and casting the "key" column.
+
+``` python
+def op_groupby(df, column_names):
+    # Perform a simple group-by operation on the DataFrame
+    df_aggregation = df.groupBy(column_names).count()
+    return df_aggregation
+```
+
+This function performs a simple group-by operation on the DataFrame based on specified column names and counts the occurrences of each group.
+
+``` python
+def op_windowed_groupby(df, window_duration, slide_duration):
+    # Perform a windowed group-by operation on the DataFrame
+    df_windowed_aggregation = df.groupBy(
+        F.window(timeColumn=df.tpep_pickup_datetime, windowDuration=window_duration, slideDuration=slide_duration),
+        df.vendor_id
+    ).count()
+    return df_windowed_aggregation
+```
+
+This function performs a windowed group-by operation on the DataFrame. It groups the data into time windows based on the "tpep_pickup_datetime" column and performs a count aggregation within each window.
+
+``` python
+if __name__ == "__main__":
+    # Initialize a SparkSession
+    spark = SparkSession.builder.appName('streaming-examples').getOrCreate()
+    spark.sparkContext.setLogLevel('WARN')
+
+    # Read streaming data from Kafka
+    df_consume_stream = read_from_kafka(consume_topic=CONSUME_TOPIC_RIDES_CSV)
+    print(df_consume_stream.printSchema())
+
+    # Parse streaming data
+    df_rides = parse_ride_from_kafka_message(df_consume_stream, RIDE_SCHEMA)
+    print(df_rides.printSchema())
+
+    # Sink the parsed data to the console for debugging/testing
+    sink_console(df_rides, output_mode='append')
+
+    # Perform a group-by operation on vendor_id
+    df_trip_count_by_vendor_id = op_groupby(df_rides, ['vendor_id'])
+    
+    # Perform a windowed group-by operation on pickup datetime and vendor_id
+    df_trip_count_by_pickup_date_vendor_id = op_windowed_groupby(df_rides, window_duration="10 minutes",
+                                                                 slide_duration='5 minutes')
+
+    # Sink the results to the console
+    sink_console(df_trip_count_by_vendor_id)
+    
+    # Prepare the data for writing to a Kafka sink
+    df_trip_count_messages = prepare_df_to_kafka_sink(df=df_trip_count_by_pickup_date_vendor_id,
+                                                      value_columns=['count'], key_column='vendor_id')
+    
+    # Write the prepared data to a Kafka topic
+    kafka_sink_query = sink_kafka(df=df_trip_count_messages, topic=TOPIC_WINDOWED_VENDOR_ID_COUNT)
+
+    # Await termination of Spark Streaming
+    spark.streams.awaitAnyTermination()
+```
+
+The main part of the code initializes a SparkSession, reads streaming data from Kafka, parses the data, performs aggregation operations, and sinks the results to various outputs (console, Kafka). It sets the log level and awaits the termination of Spark Streaming queries.
+
+Overall, this code is an example of how to use Spark Structured Streaming to process data from Kafka topics and perform various operations on the streaming data. The operations include parsing, aggregation, and sinking data to different sinks for further analysis or storage.
+
+You can view the total file at ``./local/structured-streaming-with-pyspark/streaming.py``
 
 
 ### 6.6.2 Setup utils and setting file
